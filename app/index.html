@@ -17,6 +17,7 @@
       <h1>Nordtour <span>2027</span></h1>
       <div class="dates">Hamburg → Nordkapp → Hamburg</div>
     </div>
+    <div class="sync" id="sync" aria-live="polite"></div>
     <div class="stats">
       <div class="stat"><span class="k">Abfahrt in</span><span class="v" id="sCount">–</span><span class="x" id="sDates"></span></div>
       <div class="stat"><span class="k">Strecke</span><span class="v" id="sKm">–</span><span class="x" id="sKmX"></span></div>
@@ -61,11 +62,25 @@
     Karte © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende ·
     Routing: <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener">Valhalla</a> auf dem Server der <a href="https://www.fossgis.de/" target="_blank" rel="noopener">FOSSGIS</a> ·
     Ortssuche: <a href="https://nominatim.org/" target="_blank" rel="noopener">Nominatim</a> ·
-    Gespeichert wird vorerst nur in diesem Browser.
+    Speicher: <a href="https://supabase.com/" target="_blank" rel="noopener">Supabase</a>
   </footer>
 </div>
 
+<dialog id="loginDlg" aria-labelledby="loginTitle">
+  <form id="loginForm" autocomplete="on">
+    <h2 id="loginTitle">Anmelden</h2>
+    <p class="hint">Mit dem Benutzer, den du in Supabase angelegt hast. Danach sind deine Daten auf allen Geräten gleich.</p>
+    <label class="lbl">E-Mail<input type="email" name="email" autocomplete="username" required></label>
+    <label class="lbl">Passwort<input type="password" name="password" autocomplete="current-password" required></label>
+    <p class="formerr" id="loginErr"></p>
+    <div class="acts"><button class="btn" type="submit">Anmelden</button><button class="btn ghost" type="button" id="loginCancel">Abbrechen</button></div>
+  </form>
+</dialog>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
+<script src="sync.js"></script>
 </body>
 </html>

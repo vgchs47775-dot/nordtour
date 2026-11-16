@@ -37,7 +37,10 @@ function hav(a, b) {
 }
 
 /* ================= Speicher ================= */
-function save() { try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { notice("Speichern im Browser fehlgeschlagen: " + e.message); } }
+function save() {
+  try { localStorage.setItem(STORE, JSON.stringify(state)); } catch (e) { notice("Speichern im Browser fehlgeschlagen: " + e.message); }
+  if (typeof onLocalSave === "function") onLocalSave();   // Cloud-Abgleich (sync.js)
+}
 function loadLocal() { try { const s = localStorage.getItem(STORE); return s ? JSON.parse(s) : null; } catch { return null; } }
 function loadRoutes() { try { routes = JSON.parse(localStorage.getItem(RSTORE)) || {}; } catch { routes = {}; } }
 function saveRoutes() {
@@ -262,9 +265,9 @@ function renameNight(d, oldName, name) {
 }
 
 /* ================= Anzeige ================= */
-function notice(html, withUndo = false) {
+function notice(html, withUndo = false, extraHtml = "") {
   const n = $("#notice");
-  n.innerHTML = `<span>${html}</span>${withUndo && undoSnap ? `<button class="btn ghost mini" type="button" id="btnUndo">Rückgängig</button>` : ""}<button class="btn ghost mini" type="button" id="btnHide">Ausblenden</button>`;
+  n.innerHTML = `<span>${html}</span>${withUndo && undoSnap ? `<button class="btn ghost mini" type="button" id="btnUndo">Rückgängig</button>` : ""}${extraHtml}<button class="btn ghost mini" type="button" id="btnHide">Ausblenden</button>`;
   n.hidden = false;
 }
 $("#notice").addEventListener("click", e => {
@@ -503,7 +506,7 @@ $("#btnReset").addEventListener("click", async () => {
 });
 
 /* ================= Start ================= */
-(async function init() {
+const appReady = (async function init() {
   loadRoutes();
   state = loadLocal();
   if (!state) {
