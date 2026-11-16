@@ -1,0 +1,12 @@
+# Öffentlich auf GitHub kommt NUR der App-Code.
+# Alles Persönliche (Reisedaten, Zusammenfassung, alte Seite, Werkzeuge) bleibt auf dem PC.
+/*
+!/.gitignore
+!/README.md
+!/app/
+!/.github/
+
+# Reisedaten nie hochladen – sie werden in der App über „Laden“ eingespielt (später Supabase)
+app/daten.json
+*.json.bak
+nordtour-*.json
