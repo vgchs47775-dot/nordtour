@@ -136,6 +136,7 @@ async function ensureRoutes() {
     renderDay(d.id); drawRoutes(); updateStats();
   }
   drawRoutes(); updateStats();
+  if (typeof renderCostTop === "function" && state.costs) renderCostTop();   // Spritkosten hängen an den km
 }
 function applyRoute(d, r) {
   d.km = Math.round(r.km);
@@ -361,7 +362,8 @@ function renderDay(id) {
   if (i < 0 || !el) return renderDays();
   el.outerHTML = dayHtml(list[i], i, list);
 }
-function updateStats() {
+// Gesamtstrecke: live berechnete Etappen, sonst die eingetragenen Planwerte
+function routeTotals() {
   const list = sortedDays();
   let km = 0, h = 0, live = 0, busy = 0;
   list.forEach((d, i) => {
@@ -369,18 +371,33 @@ function updateStats() {
     if (r) { km += r.km; h += r.h + r.ferryH; live++; } else { km += d.km || 0; h += d.hours || 0; }
     if (routeStatus[d.id] === "busy") busy++;
   });
-  const days = Math.ceil((new Date(tripStart() + "T00:00:00") - new Date()) / 864e5);
-  $("#sCount").innerHTML = days > 0 ? `${num(days)} <small>Tage</small>` : "unterwegs";
-  $("#sDates").textContent = list.length ? `${fmtDate(list[0].date)} – ${fmtDate(list[list.length - 1].date)}` : "";
-  $("#sKm").innerHTML = `${num(km)} <small>km</small>`;
-  $("#sKmX").textContent = `${list.length} Etappen`;
-  $("#sHours").innerHTML = `${num(h)} <small>h</small>`;
-  const longDays = list.filter(d => (d.hours || 0) > LONG_DAY).length;
-  $("#sHoursX").textContent = longDays ? `${longDays} lange Fahrtage (> ${LONG_DAY} h)` : "keine langen Fahrtage";
-  $("#sRoute").innerHTML = `${live}<small>/${list.length}</small>`;
-  $("#sRouteX").textContent = busy ? "wird berechnet …" : live === list.length ? "alle Etappen live" : "Etappen live berechnet";
+  return { km, h, live, busy, n: list.length };
 }
-function refresh() { renderDays(); drawMarkers(); drawRoutes(); updateStats(); ensureRoutes(); }
+function updateStats() {
+  const list = sortedDays(), t = routeTotals();
+  const days = Math.ceil((new Date(tripStart() + "T00:00:00") - new Date()) / 864e5);
+  const openTodos = (state.todos || []).filter(x => !x.done).length;
+  $("#sCount").innerHTML = days > 0 ? `${num(days)} <small>Tage</small>` : "unterwegs";
+  $("#sDates").textContent = (list.length ? `${fmtDate(list[0].date)} – ${fmtDate(list[list.length - 1].date)}` : "") +
+    (openTodos ? ` · ${openTodos} To-dos offen` : "");
+  $("#sKm").innerHTML = `${num(t.km)} <small>km</small>`;
+  const longDays = list.filter(d => (d.hours || 0) > LONG_DAY).length;
+  $("#sKmX").textContent = t.busy ? `Route wird berechnet … (${t.live}/${t.n})` :
+    `${num(t.h)} h Fahrzeit` + (longDays ? ` · ${longDays} lange Tage` : "") + (t.live < t.n ? ` · ${t.live}/${t.n} live` : "");
+  if (typeof costSummary === "function" && state.costs) {
+    const s = costSummary();
+    $("#sCost").innerHTML = `${euro(s.total)}`;
+    $("#sCostX").textContent = `${euro(s.total / s.persons)} pro Person` + (s.missing ? ` · ${s.missing} ohne Betrag` : "");
+    const n = state.pack?.length || 0, d = state.pack?.filter(i => i.done).length || 0;
+    $("#sPack").innerHTML = n ? `${d}<small>/${n}</small>` : "–";
+    $("#sPackBar").style.width = n ? (d / n * 100).toFixed(1) + "%" : "0";
+  }
+}
+function refresh() {
+  if (typeof normalizeState === "function" && normalizeState(state)) save();   // alte Listenformate umwandeln
+  renderDays(); drawMarkers(); drawRoutes(); updateStats(); ensureRoutes();
+  if (typeof renderLists === "function") renderLists();
+}
 
 function selectDay(id, zoom = true) {
   selDay = id;

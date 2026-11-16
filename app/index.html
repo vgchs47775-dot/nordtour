@@ -21,14 +21,22 @@
     <div class="stats">
       <div class="stat"><span class="k">Abfahrt in</span><span class="v" id="sCount">–</span><span class="x" id="sDates"></span></div>
       <div class="stat"><span class="k">Strecke</span><span class="v" id="sKm">–</span><span class="x" id="sKmX"></span></div>
-      <div class="stat"><span class="k">Fahrzeit</span><span class="v" id="sHours">–</span><span class="x" id="sHoursX"></span></div>
-      <div class="stat"><span class="k">Routing</span><span class="v" id="sRoute">–</span><span class="x" id="sRouteX"></span></div>
+      <div class="stat"><span class="k">Kosten</span><span class="v" id="sCost">–</span><span class="x" id="sCostX"></span></div>
+      <div class="stat"><span class="k">Eingepackt</span><span class="v" id="sPack">–</span><div class="bar"><i id="sPackBar"></i></div></div>
     </div>
   </header>
 
+  <nav class="tabs" aria-label="Bereiche">
+    <a href="#route" data-view="route">Route</a>
+    <a href="#kosten" data-view="kosten">Kosten</a>
+    <a href="#todos" data-view="todos">To-dos <span class="n" id="nTodo">0</span></a>
+    <a href="#packen" data-view="packen">Packliste <span class="n" id="nPack">0</span></a>
+    <a href="#kaufen" data-view="kaufen">Kaufen <span class="n" id="nBuy">0</span></a>
+  </nav>
+
   <p class="notice" id="notice" hidden></p>
 
-  <section class="route">
+  <section class="route" id="v-route">
     <div class="mapbox">
       <div id="map" aria-label="Karte der Route. Übernachtungsorte lassen sich mit der Maus oder dem Finger verschieben."></div>
       <div class="map-foot">
@@ -58,6 +66,109 @@
     </div>
   </section>
 
+  <!-- KOSTEN -->
+  <section id="v-kosten" hidden aria-labelledby="h-cost">
+    <h2 id="h-cost">Kosten</h2>
+    <div class="cost-top">
+      <div class="panel">
+        <div class="big">
+          <div><b id="cTotal">–</b><span>Gesamt</span></div>
+          <div><b id="cPP">–</b><span id="cPPl">Pro Person</span></div>
+          <div><b id="cOpen">–</b><span>Noch nicht bezahlt</span></div>
+        </div>
+        <div class="cbars" id="cBars"></div>
+        <p class="hint" id="cMissing"></p>
+      </div>
+      <form class="panel fuel" id="fuelForm" autocomplete="off">
+        <h3>Sprit &amp; Mitreisende</h3>
+        <div class="three">
+          <label class="lbl" for="sPersons">Personen<input type="number" id="sPersons" min="1" max="9" step="1"></label>
+          <label class="lbl" for="sCons">Verbrauch l/100 km<input type="number" id="sCons" min="1" max="30" step="0.1"></label>
+          <label class="lbl" for="sPrice">Preis €/l<input type="number" id="sPrice" min="0.5" max="5" step="0.01"></label>
+        </div>
+        <div class="res" id="fuelRes">–</div>
+        <label class="toggle" for="sAuto"><input type="checkbox" id="sAuto"> Spritkosten automatisch aus den live berechneten Kilometern</label>
+        <div class="acts"><button class="btn mini" type="submit">Übernehmen</button><span class="formerr" id="fErr"></span></div>
+      </form>
+    </div>
+    <p class="hint spaced">Beträge direkt ins Feld tippen – gespeichert wird beim Verlassen des Felds. Häkchen = bezahlt.</p>
+    <div id="costGroups"></div>
+    <form class="add" id="addCost" autocomplete="off">
+      <div class="fields four">
+        <label class="lbl" for="kTitle">Neuer Kostenposten<input type="text" id="kTitle" maxlength="80" placeholder="z. B. Walsafari Andenes"></label>
+        <label class="lbl" for="kCat">Kategorie<select id="kCat"></select></label>
+        <label class="lbl" for="kAmt">Betrag (€)<input type="number" id="kAmt" min="0" step="0.01" inputmode="decimal"></label>
+        <label class="lbl" for="kDay">Tag<select id="kDay"></select></label>
+        <button class="btn" type="submit">Hinzufügen</button>
+      </div>
+      <p class="formerr" id="kErr"></p>
+    </form>
+  </section>
+
+  <!-- TO-DOS -->
+  <section id="v-todos" hidden aria-labelledby="h-todo">
+    <div class="toolbar">
+      <h2 id="h-todo">Vor der Abfahrt erledigen</h2>
+      <label class="toggle"><input type="checkbox" id="todoOpen"> Nur Offenes zeigen</label>
+    </div>
+    <div class="group"><div id="todoRows"></div></div>
+    <form class="add" id="addTodo" autocomplete="off">
+      <div class="fields">
+        <label class="lbl" for="tTitle">Neue Aufgabe<input type="text" id="tTitle" maxlength="120" placeholder="z. B. Nachbarn wegen Post fragen"></label>
+        <label class="lbl" for="tDue">Bis wann?<input type="date" id="tDue"></label>
+        <button class="btn" type="submit">Hinzufügen</button>
+      </div>
+      <p class="formerr" id="tErr"></p>
+    </form>
+  </section>
+
+  <!-- PACKLISTE -->
+  <section id="v-packen" hidden aria-labelledby="h-pack">
+    <div class="toolbar">
+      <h2 id="h-pack">Packliste</h2>
+      <div class="acts">
+        <span class="toggle" id="packSum"></span>
+        <label class="toggle"><input type="checkbox" id="onlyOpen"> Nur noch nicht Eingepacktes</label>
+        <button class="btn ghost mini" type="button" id="packReset" hidden>Häkchen zurücksetzen</button>
+      </div>
+    </div>
+    <div id="packGroups"></div>
+    <form class="add" id="addPack" autocomplete="off">
+      <div class="fields four">
+        <label class="lbl" for="pName">Neuer Gegenstand<input type="text" id="pName" maxlength="80" placeholder="z. B. Angelrute"></label>
+        <label class="lbl" for="pCat">Kategorie<select id="pCat"></select></label>
+        <label class="lbl" for="pQty">Menge<input type="text" id="pQty" maxlength="12" value="1"></label>
+        <button class="btn" type="submit">Hinzufügen</button>
+      </div>
+      <p class="formerr" id="pErr"></p>
+    </form>
+  </section>
+
+  <!-- KAUFEN -->
+  <section id="v-kaufen" hidden aria-labelledby="h-buy">
+    <div class="toolbar">
+      <h2 id="h-buy">Anschaffen</h2>
+      <span class="toggle" id="buySum"></span>
+    </div>
+    <div id="buyOpen" class="cards"></div>
+    <h3 class="subhead" id="buyDoneHead" hidden>Schon gekauft</h3>
+    <div id="buyDone" class="cards"></div>
+    <form class="add" id="addBuy" autocomplete="off">
+      <div class="fields four">
+        <label class="lbl" for="bName">Was willst du kaufen?<input type="text" id="bName" maxlength="80" placeholder="z. B. Kopfnetz gegen Mücken"></label>
+        <label class="lbl" for="bPrio">Priorität<select id="bPrio"><option>Muss</option><option selected>Sollte</option><option>Nice-to-have</option></select></label>
+        <label class="lbl" for="bPrice">Preis (€)<input type="number" id="bPrice" min="0" step="0.01" inputmode="decimal"></label>
+        <label class="lbl" for="bCat">Kategorie<select id="bCat"></select></label>
+      </div>
+      <div class="fields">
+        <label class="lbl" for="bLink">Shop-Link<input type="url" id="bLink" placeholder="https://…"></label>
+        <span></span>
+        <button class="btn" type="submit">Hinzufügen</button>
+      </div>
+      <p class="formerr" id="bErr"></p>
+    </form>
+  </section>
+
   <footer class="foot">
     Karte © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>-Mitwirkende ·
     Routing: <a href="https://valhalla.github.io/valhalla/" target="_blank" rel="noopener">Valhalla</a> auf dem Server der <a href="https://www.fossgis.de/" target="_blank" rel="noopener">FOSSGIS</a> ·
@@ -81,6 +192,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script src="lists.js"></script>
 <script src="sync.js"></script>
 </body>
 </html>
