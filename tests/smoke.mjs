@@ -71,6 +71,7 @@ for (const [view, sel] of Object.entries(VIEWS)) {
 await page.evaluate(() => { location.hash = "#route"; });
 await page.click("#btnReorder"); await page.click("#btnReorder");
 await page.click("#btnMapEdit"); await page.click("#btnMapEdit");
+await page.click('.day[data-day="t2"] .t');            // kompakte Kärtchen: erst aufklappen
 await page.click('[data-extend="t2"]');
 await page.waitForTimeout(300);
 const n = await page.locator("#days .day").count();
