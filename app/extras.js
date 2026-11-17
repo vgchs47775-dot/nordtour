@@ -97,15 +97,15 @@ function dayExtrasHtml(d, r) {
     const part = p.days.length > 1 ? ` (Teil ${p.days.indexOf(d.id) + 1} von ${p.days.length})` : "";
     h += `<span class="pano">Über ${esc(p.name)}${part}</span>`;
   }
-  // Hinweis nur, wenn eigene Zwischenziele dadurch wirklich wegfallen
-  const pv = panoVia(d);
-  const lost = pv ? (d.via || []).filter(v => !pv.some(w => Math.abs(w.lat - v.lat) < .02 && Math.abs(w.lon - v.lon) < .02)) : [];
-  if (lost.length) h += `<span class="hint">Mit der Panoramastraße entfällt: ${lost.map(v => esc(v.name)).join(", ")}</span>`;
+  // Tagesprogramm: eingeplante Sehenswürdigkeiten + Aufenthalte an eigenen Stopps
   const pr = dayProgram(d);
-  if (pr.list.length) {
-    const drive = r ? r.h + r.ferryH : (d.hours || 0), tot = drive + pr.visit + pr.detour;
-    h += `<span class="prog">Programm: ${pr.list.map(x => esc(x.name)).join(", ")} · ${fmtShort(pr.visit)}${pr.detour ? ` + ${fmtShort(pr.detour)} Umweg` : ""}</span>` +
-      `<span class="total${tot > 10 ? " long" : ""}">Tag gesamt ca. ${fmtH(tot)}${tot > 10 ? " – sehr voll" : ""}</span>`;
+  const stops = (d.via || []).filter(v => v.stay > 0);
+  const stopH = stops.reduce((a, v) => a + v.stay / 60, 0);
+  if (pr.list.length) h += `<span class="prog">Programm: ${pr.list.map(x => esc(x.name)).join(", ")} · ${fmtShort(pr.visit)}${pr.detour ? ` + ${fmtShort(pr.detour)} Umweg` : ""}</span>`;
+  if (stops.length) h += `<span class="stops">Stopps: ${stops.map(v => `${esc(v.name)} ${fmtShort(v.stay / 60)}`).join(", ")}</span>`;
+  if (pr.list.length || stops.length) {
+    const drive = r ? r.h + r.ferryH : (d.hours || 0), tot = drive + pr.visit + pr.detour + stopH;
+    h += `<span class="total${tot > 10 ? " long" : ""}">Fahrt ${fmtShort(drive)} + Programm ${fmtShort(tot - drive)} = Tag gesamt ca. ${fmtShort(tot)}${tot > 10 ? " – sehr voll" : ""}</span>`;
   }
   return h + sky;
 }
@@ -213,7 +213,7 @@ function drawExtras() {
   if (SHOW.pano) for (const p of PANO()) {
     const on = isPlanned("pano", p.id);
     const line = L.polyline(p.geom, { pane: "panoPane", interactive: false, ...(on ? { color: "#3d7a3a", weight: 8, opacity: .55 } : { color: "#3d7a3a", weight: 3.5, opacity: .75, dashArray: "4 7" }) });
-    const hit = L.polyline(p.geom, { pane: "panoPane", color: "#000", opacity: 0, weight: 16 });
+    const hit = L.polyline(p.geom, { pane: "panoPane", color: "#000", opacity: 0, weight: 16, bubblingMouseEvents: false });
     hit.bindPopup(() => popupPano(p), { maxWidth: 300, minWidth: 240 });
     hit.bindTooltip(esc(p.name), { sticky: true });
     line.addTo(panoLayer); hit.addTo(panoLayer); panoLines[p.id] = hit;

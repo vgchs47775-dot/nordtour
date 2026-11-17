@@ -72,7 +72,7 @@ const findItem = (kind, id) => coll(kind)?.find(x => x.id === id);
 function commit() { save(); renderLists(); }
 
 /* ================= Reiter ================= */
-const VIEWS = ["route", "panorama", "erleben", "himmel", "kosten", "todos", "packen", "kaufen"];
+const VIEWS = ["route", "panorama", "erleben", "himmel", "tagebuch", "kosten", "todos", "packen", "kaufen"];
 function showView() {
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "route";
   for (const x of VIEWS) $("#v-" + x).hidden = x !== v;
@@ -355,6 +355,7 @@ function renderLists() {
   renderCosts(); renderTodos(); renderPack(); renderBuy();
   if (typeof renderExtras === "function") renderExtras();
   if (typeof renderSky === "function") renderSky();
+  if (typeof renderJournal === "function") renderJournal();
   const openTodos = state.todos.filter(t => !t.done).length;
   $("#nTodo").textContent = openTodos;
   $("#nPack").textContent = state.pack.filter(i => !i.done).length;

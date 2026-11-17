@@ -4,6 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Nordtour 2027</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#1f4e63">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Nordtour">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/favicon-32.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -17,7 +25,8 @@
       <h1>Nordtour <span>2027</span></h1>
       <div class="dates">Hamburg → Nordkapp → Hamburg</div>
     </div>
-    <div class="sync" id="sync" aria-live="polite"></div>
+    <div class="topbar"><span class="chip warn" id="netstate" hidden>Offline – die App läuft weiter, Änderungen werden später hochgeladen</span><div class="sync" id="sync" aria-live="polite"></div></div>
+    <div class="updbar" id="updbar" hidden><span>Eine neue Version der App ist verfügbar.</span><button class="btn mini" type="button">Jetzt neu laden</button></div>
     <div class="stats">
       <div class="stat"><span class="k">Abfahrt in</span><span class="v" id="sCount">–</span><span class="x" id="sDates"></span></div>
       <div class="stat"><span class="k">Strecke</span><span class="v" id="sKm">–</span><span class="x" id="sKmX"></span></div>
@@ -31,6 +40,7 @@
     <a href="#panorama" data-view="panorama">Panoramastraßen <span class="n" id="nPano">0</span></a>
     <a href="#erleben" data-view="erleben">Erleben <span class="n" id="nSights">0</span></a>
     <a href="#himmel" data-view="himmel">Nachthimmel</a>
+    <a href="#tagebuch" data-view="tagebuch">Tagebuch</a>
     <a href="#kosten" data-view="kosten">Kosten</a>
     <a href="#todos" data-view="todos">To-dos <span class="n" id="nTodo">0</span></a>
     <a href="#packen" data-view="packen">Packliste <span class="n" id="nPack">0</span></a>
@@ -44,7 +54,7 @@
       <div id="map" aria-label="Karte der Route. Übernachtungsorte lassen sich mit der Maus oder dem Finger verschieben."></div>
       <div class="map-foot">
         <div class="legend"><span>Übernachtung (Tag)</span><span class="r">Route (live)</span><span class="f">Fähre (Schätzung)</span><span class="p">Panoramastraße</span><span class="s">Sehenswürdigkeit</span></div>
-        <span class="map-note">Marker ziehen = Übernachtung verschieben</span>
+        <span class="map-note">Marker ziehen = verschieben · Tag wählen und auf die Karte tippen = Stopp einlegen</span>
       </div>
     </div>
     <div>
@@ -97,6 +107,17 @@
     <div class="sky-best" id="skyBest"></div>
     <div class="panel tablewrap"><table class="sky" id="skyTable"></table></div>
     <p class="hint spaced">Kp-Index: Maß für die geomagnetische Aktivität von 0 (ruhig) bis 9 (extremer Sturm). Kp 1–3 kommt in den meisten Nächten vor, Kp 5 und mehr nur bei Sonnenstürmen. Ein heller Mond (über 60 % beleuchtet) schwächt schwache Polarlichter ab. Zeiten in Sommerzeit (MESZ). Prognose: 3-Tage-Werte der NOAA für das dunkle Fenster, sonst der größte Kp aus dem 27-Tage-Ausblick. Quelle: <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener">NOAA Space Weather Prediction Center</a>.</p>
+  </section>
+
+  <!-- TAGEBUCH -->
+  <section id="v-tagebuch" hidden aria-labelledby="h-journal">
+    <div class="toolbar">
+      <h2 id="h-journal">Reisetagebuch</h2>
+      <div class="acts"><span class="toggle" id="journalSum"></span><label class="toggle"><input type="checkbox" id="journalOnly"> Nur Tage mit Einträgen</label></div>
+    </div>
+    <p class="lead" id="journalInfo"></p>
+    <p class="hint spaced" id="journalQueue"></p>
+    <div id="journalList"></div>
   </section>
 
   <!-- KOSTEN -->
@@ -210,6 +231,20 @@
   </footer>
 </div>
 
+<dialog id="photoDlg" class="photodlg" aria-label="Foto">
+  <img id="photoImg" alt="">
+  <div class="photobar">
+    <input type="text" id="photoCap" maxlength="200" placeholder="Bildunterschrift">
+    <div class="acts">
+      <button class="btn ghost mini" type="button" id="photoPrev" aria-label="Vorheriges Foto">‹</button>
+      <span class="hint" id="photoPos"></span>
+      <button class="btn ghost mini" type="button" id="photoNext" aria-label="Nächstes Foto">›</button>
+      <button class="btn danger mini" type="button" id="photoDel">Löschen</button>
+      <button class="btn mini" type="button" id="photoClose">Schließen</button>
+    </div>
+  </div>
+</dialog>
+
 <dialog id="loginDlg" aria-labelledby="loginTitle">
   <form id="loginForm" autocomplete="on">
     <h2 id="loginTitle">Anmelden</h2>
@@ -222,12 +257,16 @@
 </dialog>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.6/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
 <script src="extras.js"></script>
 <script src="app.js"></script>
+<script src="stops.js"></script>
 <script src="lists.js"></script>
 <script src="sky.js"></script>
+<script src="journal.js"></script>
 <script src="sync.js"></script>
+<script src="pwa.js"></script>
 </body>
 </html>

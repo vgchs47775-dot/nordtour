@@ -288,3 +288,39 @@ table.sky tr:last-child td { border-bottom: 0; }
 
 .foot { margin-top: 28px; font-size: 12px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Tage verschieben & Stopps */
+.day .d { position: relative; }
+.grip { display: block; width: 28px; margin: -2px 0 2px -4px; color: var(--muted); font-size: 18px; line-height: 1; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; padding: 2px 4px; border-radius: 6px; }
+.grip:hover { background: var(--bg); color: var(--ink); }
+.drag-ghost { opacity: .4; }
+.movebtns { display: inline-flex; gap: 2px; }
+.movebtns .btn { padding: 5px 8px; }
+.day .stops { font-size: 13px; color: var(--sun); font-weight: 600; }
+.stmk { width: 20px; height: 20px; border-radius: 50%; background: #fff; color: #e2731b; border: 2.5px solid #e2731b; display: grid; place-items: center; font: 700 10px/1 var(--font-body); box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.stmk.stay { background: #e2731b; color: #fff; border-color: #fff; }
+.leaflet-popup-content .stopform { display: grid; gap: 6px; }
+.leaflet-popup-content .stopform input { width: 100%; border: 1px solid #d3dde2; border-radius: 8px; padding: 6px 8px; background: #fff; color: #15232c; }
+.leaflet-popup-content .lbl { color: #5a6d78; }
+.leaflet-popup-content .btn.danger { color: #a3471b; border: 1px solid #d3dde2; background: #fff; }
+
+/* Offline & Update */
+.topbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.chip.warn { background: var(--sun-soft); color: var(--warn); }
+.chip.offline { background: var(--sun-soft); color: var(--warn); }
+.updbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; background: var(--moss-soft); color: var(--moss); border-radius: 10px; padding: 8px 12px; font-weight: 600; font-size: 14px; }
+
+/* Reisetagebuch */
+.jday { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; display: grid; gap: 8px; }
+.jday h3 { margin: 0; font-family: var(--font-display); font-size: 16px; color: var(--muted); }
+.jphotos { display: flex; flex-wrap: wrap; gap: 8px; }
+.jthumb { position: relative; width: 92px; height: 92px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); padding: 0; background: var(--bg); cursor: pointer; }
+.jthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.jthumb.queued { cursor: default; opacity: .7; }
+.jthumb.queued i { position: absolute; right: 4px; bottom: 2px; font-style: normal; }
+.jadd { width: 92px; height: 92px; border-radius: 8px; border: 2px dashed var(--line); display: grid; place-items: center; color: var(--fjord); font-weight: 600; font-size: 13px; cursor: pointer; }
+.jadd:hover { border-color: var(--fjord); }
+.photodlg { width: min(960px, calc(100% - 24px)); padding: 10px; }
+.photodlg img { display: block; width: 100%; max-height: 72vh; object-fit: contain; background: #000; border-radius: 8px; }
+.photobar { display: grid; gap: 8px; margin-top: 8px; }
+.photobar input { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--bg); }

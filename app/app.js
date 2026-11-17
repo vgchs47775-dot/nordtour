@@ -64,10 +64,37 @@ function hasPos(p) { return p && typeof p.lat === "number" && typeof p.lon === "
 function dayPoints(d, idx, list, viaOverride) {
   const prev = idx > 0 ? list[idx - 1] : null;
   const start = prev && hasPos(prev) ? { name: prev.night, lat: prev.lat, lon: prev.lon } : home();
-  const via = viaOverride !== undefined ? viaOverride : (typeof panoVia === "function" && panoVia(d)) || d.via || [];
+  const end = hasPos(d) ? { name: d.night, lat: d.lat, lon: d.lon } : null;
+  let via;
+  if (viaOverride !== undefined) via = viaOverride;
+  else {
+    const pv = typeof panoVia === "function" && panoVia(d);
+    // Panoramastraße eingeplant: eigene Stopps bleiben erhalten und werden passend eingefügt
+    via = pv ? mergeStops(start, pv, d.via || [], end) : (d.via || []);
+  }
   const pts = [start, ...via.filter(hasPos)];
-  if (hasPos(d)) pts.push({ name: d.night, lat: d.lat, lon: d.lon });
+  if (end) pts.push(end);
   return pts;
+}
+// Fügt Punkte dort in eine Wegpunktliste ein, wo sie den kleinsten Umweg machen
+// (nicht in Fährabschnitte). Punkte, die schon (fast) enthalten sind (< 2 km), werden übersprungen.
+function cheapestIndex(start, list, p, end) {
+  const all = [start, ...list, ...(end ? [end] : [])];
+  let best = list.length, bestCost = Infinity;
+  for (let i = 0; i < all.length - 1; i++) {
+    if (all[i].ferry) continue;
+    const c = hav(all[i], p) + hav(p, all[i + 1]) - hav(all[i], all[i + 1]);
+    if (c < bestCost) { bestCost = c; best = i; }
+  }
+  return best;            // Einfügeposition innerhalb von list
+}
+function mergeStops(start, base, stops, end) {
+  const out = [...base];
+  for (const s of stops.filter(hasPos)) {
+    if (out.some(w => hav(w, s) < 2)) continue;
+    out.splice(cheapestIndex(start, out, s, end), 0, s);
+  }
+  return out;
 }
 function routeKey(pts) { return pts.map(p => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}${p.ferry ? "F" : ""}`).join(";"); }
 
@@ -98,6 +125,9 @@ async function routeCar(pts) {
 // Teilt die Wegpunkte in Autostrecken (OSRM) und eingetragene Fährabschnitte (Luftlinie).
 async function computeRoute(pts) {
   const res = { km: 0, h: 0, ferryKm: 0, ferryH: 0, parts: [] };
+  // gleiche Punkte hintereinander (z. B. Ruhetag am selben Ort) nicht routen
+  pts = pts.filter((p, i) => i === 0 || hav(pts[i - 1], p) > 0.05 || pts[i - 1].ferry);
+  if (pts.length < 2) return res;
   let run = [pts[0]];
   const flush = async () => {
     if (run.length < 2) return;
@@ -128,13 +158,14 @@ async function ensureRoutes() {
     if (pts.length < 2) continue;
     const key = routeKey(pts);
     if (routes[key]) { applyRoute(d, routes[key]); continue; }
+    if (!navigator.onLine) { if (routeStatus[d.id] !== "offline") { routeStatus[d.id] = "offline"; renderDay(d.id); } continue; }
     routeStatus[d.id] = "busy"; renderDay(d.id); updateStats();
     try {
       const r = await computeRoute(pts);
       routes[key] = r; delete routeStatus[d.id];
       applyRoute(d, r); saveRoutes(); save();
     } catch (e) {
-      routeStatus[d.id] = "err"; console.warn("Routing", d.id, e);
+      routeStatus[d.id] = navigator.onLine ? "err" : "offline"; console.warn("Routing", d.id, e);
     }
     if (gen !== routeGen) return;
     renderDay(d.id); drawRoutes(); updateStats();
@@ -155,6 +186,7 @@ function routeFor(d) {
 /* ================= Ortssuche (Nominatim, max. 1 Anfrage/Sekunde) ================= */
 let lastNomi = 0;
 async function nomi(path) {
+  if (!navigator.onLine) throw new Error("Keine Internetverbindung – die Ortssuche braucht Internet.");
   const wait = lastNomi + 1100 - Date.now(); if (wait > 0) await sleep(wait);
   lastNomi = Date.now();
   const r = await fetch(NOMI + path + "&format=jsonv2&accept-language=de");
@@ -175,7 +207,8 @@ async function reverseName(lat, lon) {
 /* ================= Karte ================= */
 const map = L.map("map", { zoomSnap: 0.5 });
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-  maxZoom: 18, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  // crossOrigin: Kacheln als CORS-Antwort laden, damit der Service Worker sie platzsparend cachen kann
+  maxZoom: 18, crossOrigin: "", attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 }).addTo(map);
 const routeLayer = L.layerGroup().addTo(map);
 const markerLayer = L.layerGroup().addTo(map);
@@ -198,11 +231,11 @@ function drawRoutes() {
     if (r) {
       for (const p of r.parts) {
         lines.push(p.ferry
-          ? L.polyline(p.pts, { color: COL.ferry, weight: sel ? 4 : 3, dashArray: "6 6" })
-          : L.polyline(decodePolyline(p.enc), style));
+          ? L.polyline(p.pts, { color: COL.ferry, weight: sel ? 4 : 3, dashArray: "6 6", bubblingMouseEvents: false })
+          : L.polyline(decodePolyline(p.enc), { ...style, bubblingMouseEvents: false }));
       }
     } else {
-      lines.push(L.polyline(pts.map(p => [p.lat, p.lon]), { color: COL.todo, weight: 2, dashArray: "2 6" }));
+      lines.push(L.polyline(pts.map(p => [p.lat, p.lon]), { color: COL.todo, weight: 2, dashArray: "2 6", bubblingMouseEvents: false }));
     }
     for (const l of lines) {
       l.on("click", () => selectDay(d.id, false));
@@ -226,6 +259,7 @@ function drawMarkers() {
     m.on("dragend", e => moveNight(d.id, e.target.getLatLng()));
     m.addTo(markerLayer); markers[d.id] = m;
   });
+  if (typeof drawStops === "function") drawStops();          // Stopps des gewählten Tages (stops.js)
 }
 function fitAll() {
   const b = L.latLngBounds([[home().lat, home().lon]]);
@@ -297,6 +331,9 @@ function dayHtml(d, idx, list) {
   const st = routeStatus[d.id];
   let drive = "";
   if (st === "busy") drive = `<span class="busy">Route wird berechnet …</span>`;
+  else if (st === "offline" && !r) drive = `<span class="busy">Offline – die Route wird berechnet, sobald wieder Internet da ist</span>` +
+    (d.km ? `<span>Plan: ca. ${num(d.km)} km</span>` : "");
+  else if (r && r.km < 0.1 && !r.ferryKm) drive = `<span class="live">Ruhetag</span><span>kein Fahrtag</span>`;
   else if (r) {
     const total = r.h + r.ferryH;
     drive = `<span class="live" title="Live berechnet über OpenStreetMap-Daten">live</span><span>${num(r.km)} km</span>` +
@@ -308,7 +345,7 @@ function dayHtml(d, idx, list) {
   }
   if (d.ferries) drive += `<span class="ferry">${d.ferries} ${d.ferries === 1 ? "Fähre" : "Fähren"}</span>`;
   let h = `<li class="day${d.id === selDay ? " sel" : ""}" data-day="${esc(d.id)}" tabindex="0">
-    <span class="d"><b>${fmtDate(d.date)}</b><small>${isNaN(dt) ? "" : DAY_NAMES[dt.getDay()] + " · "}Tag ${dayNo(d.date)}</small></span>
+    <span class="d"><span class="grip" title="Ziehen zum Verschieben" aria-hidden="true">⠿</span><b>${fmtDate(d.date)}</b><small>${isNaN(dt) ? "" : DAY_NAMES[dt.getDay()] + " · "}Tag ${dayNo(d.date)}</small></span>
     <span class="body"><span class="t">${esc(d.title || "Ohne Titel")}</span>
       ${d.sub ? `<span class="s">${esc(d.sub)}</span>` : ""}
       <span class="drive">${drive}</span>
@@ -319,6 +356,8 @@ function dayHtml(d, idx, list) {
       ${editingDay !== d.id ? `<span class="acts">
         ${pts.length > 1 ? `<a class="btn go mini" href="${esc(mapsUrl(pts))}" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>` : ""}
         <button type="button" class="btn ghost mini" data-edit="${esc(d.id)}">Bearbeiten</button>
+        <span class="movebtns"><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:-1" aria-label="Tag nach oben"${idx === 0 ? " disabled" : ""}>↑</button><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:1" aria-label="Tag nach unten"${idx === list.length - 1 ? " disabled" : ""}>↓</button></span>
+        <button type="button" class="btn ghost mini" data-extend="${esc(d.id)}" title="Eine weitere Nacht am selben Ort – alle folgenden Tage rücken einen Tag nach hinten">+ Nacht</button>
         ${st === "err" ? `<button type="button" class="btn ghost mini" data-retry="${esc(d.id)}">Route neu versuchen</button>` : ""}
       </span>` : ""}
     </span>`;
@@ -441,10 +480,12 @@ $("#days").addEventListener("click", async e => {
   if (t.closest("[data-retry]")) { delete routeStatus[t.closest("[data-retry]").dataset.retry]; ensureRoutes(); return; }
   if (t.closest("[data-del]")) {
     const id = t.closest("[data-del]").dataset.del, d = state.days.find(x => x.id === id);
-    if (!confirm(`Tag „${d?.title}“ wirklich löschen?`)) return;
+    if (!confirm(`Tag „${d?.title}“ wirklich löschen? Die folgenden Tage rücken dann einen Tag nach vorne.`)) return;
     undoSnap = JSON.stringify(state.days);
-    state.days = state.days.filter(x => x.id !== id); editingDay = null; save(); refresh();
-    notice(`Tag „${esc(d?.title)}“ gelöscht.`, true); return;
+    state.days = state.days.filter(x => x.id !== id); editingDay = null;
+    if (typeof renumberDays === "function") renumberDays();
+    save(); refresh();
+    notice(`Tag „${esc(d?.title)}“ gelöscht, die folgenden Tage sind einen Tag nach vorne gerückt.`, true); return;
   }
   if (t.closest("[data-find]")) {
     const f = t.closest("form"), err = f.querySelector("[data-err]"), btn = t.closest("[data-find]");
@@ -468,6 +509,8 @@ $("#days").addEventListener("submit", async e => {
     if (f.coords.value.trim() && !pos) throw new Error("Koordinaten nicht lesbar – Format: 62.47, 6.19");
     if (!pos && f.night.value.trim()) { const g = await geocode(f.night.value.replace(/\s*\(.*\)\s*$/, "")); pos = { lat: g.lat, lon: g.lon }; }
     const via = await parseVia(f.via.value);
+    // Aufenthaltsdauer der Stopps übernehmen (steht nicht im Textfeld)
+    for (const v of via) { const o = (d.via || []).find(x => x.name === v.name || hav(x, v) < 0.5); if (o?.stay) v.stay = o.stay; }
     undoSnap = JSON.stringify(state.days);
     const oldNight = d.night, newNight = f.night.value.trim();
     Object.assign(d, {

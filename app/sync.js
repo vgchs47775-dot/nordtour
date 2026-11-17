@@ -29,7 +29,8 @@ function renderSync() {
     el.innerHTML = `<span class="chip off">Nicht angemeldet – nur in diesem Browser</span><button class="btn mini" type="button" id="btnLogin">Anmelden</button>`;
     return;
   }
-  const label = { ok: "✓ In der Cloud gespeichert", busy: "Speichert …", load: "Lädt …", err: "⚠ Nicht gespeichert" }[syncStatus] || "";
+  const label = { ok: "✓ In der Cloud gespeichert", busy: "Speichert …", load: "Lädt …", err: "⚠ Nicht gespeichert",
+    offline: syncInfo.dirty ? "Offline – wird später hochgeladen" : "Offline" }[syncStatus] || "";
   el.innerHTML = `<span class="chip ${syncStatus}"${syncMsg ? ` title="${esc(syncMsg)}"` : ""}>${label}</span>` +
     (syncStatus === "err" ? `<button class="btn ghost mini" type="button" id="btnRetry">Erneut versuchen</button>` : "") +
     `<span class="who">${esc(syncUser.email || "")}</span><button class="btn ghost mini" type="button" id="btnLogout">Abmelden</button>`;
@@ -38,6 +39,7 @@ function renderSync() {
 /* ---------- Laden aus der Cloud ---------- */
 async function pull({ first = false } = {}) {
   if (!sb || !syncUser || pushing || pushTimer) return;
+  if (!navigator.onLine) return setSync("offline");
   setSync("load");
   const { data, error } = await sb.from("trips").select("data, version").eq("id", TRIP_ID).maybeSingle();
   if (error) return setSync("err", error.message);
@@ -86,6 +88,7 @@ function schedulePush() {
 async function push() {
   if (!sb || !syncUser) return;
   if (pushing) { pushAgain = true; return; }
+  if (!navigator.onLine) { setSync("offline"); return; }         // wird beim „online“-Ereignis nachgeholt
   pushing = true; setSync("busy");
   const snap = JSON.parse(JSON.stringify(state));
   try {
@@ -105,7 +108,7 @@ async function push() {
     try { localStorage.setItem(lastSyncedKey(), JSON.stringify(snap)); } catch { /* egal */ }
     setSync("ok");
   } catch (e) {
-    setSync("err", e.message || String(e));
+    setSync(navigator.onLine ? "err" : "offline", e.message || String(e));
   } finally {
     pushing = false;
     if (pushAgain) { pushAgain = false; schedulePush(); }
