@@ -77,6 +77,7 @@ function showView() {
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "route";
   for (const x of VIEWS) $("#v-" + x).hidden = x !== v;
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
+  document.querySelector(`nav.tabs a[data-view="${v}"]`)?.scrollIntoView({ inline: "center", block: "nearest" });   // aktiven Reiter sichtbar machen
   if (v === "route") setTimeout(() => map.invalidateSize(), 0);
 }
 window.addEventListener("hashchange", showView);

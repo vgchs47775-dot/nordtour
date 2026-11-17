@@ -6,6 +6,7 @@
 !/app/
 !/.github/
 !/supabase/
+!/tests/
 
 # Reisedaten nie hochladen – sie werden in der App über „Laden“ eingespielt (später Supabase)
 app/daten.json

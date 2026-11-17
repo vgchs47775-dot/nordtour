@@ -10,8 +10,8 @@ const tripStart = () => sortedDays()[0]?.date || new Date().toISOString().slice(
 const LONG_DAY = 6;                 // Stunden, ab denen ein Fahrtag als lang gilt
 const FERRY_KMH = 28;               // Schätzung für eingetragene Fährstrecken (Luftlinie)
 const STORE = "nordtour.v1";
-const RSTORE = "nordtour.routes.v2";   // Version erhöhen, wenn sich das Routenformat ändert
-try { localStorage.removeItem("nordtour.routes.v1"); } catch { /* egal */ }
+const RSTORE = "nordtour.routes.v3";   // Version erhöhen, wenn sich das Routenformat ändert
+try { localStorage.removeItem("nordtour.routes.v1"); localStorage.removeItem("nordtour.routes.v2"); } catch { /* egal */ }
 const ROUTER = "https://valhalla1.openstreetmap.de/route?json=";
 const NOMI = "https://nominatim.openstreetmap.org/";
 const DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -116,22 +116,29 @@ function decodePolyline(str, prec = 6) {
 // Fähren im OSM-Netz (z. B. Puttgarden–Rødby, Fjordfähren) sind enthalten.
 async function routeCar(pts) {
   const q = { locations: pts.map(p => ({ lat: +p.lat.toFixed(5), lon: +p.lon.toFixed(5) })),
-    costing: "auto", units: "kilometers", directions_type: "none" };
+    costing: "auto", units: "kilometers", directions_type: "maneuvers", language: "de-DE" };
   const r = await fetch(ROUTER + encodeURIComponent(JSON.stringify(q)));
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.trip) throw new Error(j.error || "Routing-Server antwortet mit " + r.status);
-  return { km: j.trip.summary.length, h: j.trip.summary.time / 3600, encs: j.trip.legs.map(l => l.shape) };
+  // Fähren erkennen: Manöver-Typ 28 = „auf die Fähre fahren“; der Name steht oft im Straßennamen („Halhjem - Sandvikvåg“)
+  const ferries = [];
+  for (const l of j.trip.legs) for (const m of l.maneuvers || []) if (m.type === 28) {
+    const names = m.street_names || [];
+    const nm = names.find(n => / - |–/.test(n)) || (names.length ? `Fähre auf der ${names[0]}` : "Fähre");
+    ferries.push({ name: nm.replace(/\s+-\s+/g, "–"), min: Math.round(m.time / 60) });
+  }
+  return { km: j.trip.summary.length, h: j.trip.summary.time / 3600, encs: j.trip.legs.map(l => l.shape), ferries };
 }
 // Teilt die Wegpunkte in Autostrecken (OSRM) und eingetragene Fährabschnitte (Luftlinie).
 async function computeRoute(pts) {
-  const res = { km: 0, h: 0, ferryKm: 0, ferryH: 0, parts: [] };
+  const res = { km: 0, h: 0, ferryKm: 0, ferryH: 0, parts: [], ferries: [] };
   // gleiche Punkte hintereinander (z. B. Ruhetag am selben Ort) nicht routen
   pts = pts.filter((p, i) => i === 0 || hav(pts[i - 1], p) > 0.05 || pts[i - 1].ferry);
   if (pts.length < 2) return res;
   let run = [pts[0]];
   const flush = async () => {
     if (run.length < 2) return;
-    const r = await routeCar(run); res.km += r.km; res.h += r.h;
+    const r = await routeCar(run); res.km += r.km; res.h += r.h; res.ferries.push(...r.ferries);
     for (const enc of r.encs) res.parts.push({ ferry: false, enc });
     await sleep(350);
   };
@@ -142,6 +149,7 @@ async function computeRoute(pts) {
       const km = hav(a, b);
       res.ferryKm += km; res.ferryH += km / FERRY_KMH;
       res.parts.push({ ferry: true, pts: [[a.lat, a.lon], [b.lat, b.lon]] });
+      res.ferries.push({ name: `${a.name || "Fähre"} – ${b.name || ""}`.replace(/ – $/, ""), min: Math.round(km / FERRY_KMH * 60), manual: true });
       run = [b];
     } else run.push(b);
   }
@@ -149,9 +157,11 @@ async function computeRoute(pts) {
   return res;
 }
 let routeGen = 0;
+let ferryNews = [];
 async function ensureRoutes() {
   const gen = ++routeGen;
   const list = sortedDays();
+  ferryNews = [];
   for (let i = 0; i < list.length; i++) {
     if (gen !== routeGen) return;                     // neuere Berechnung läuft
     const d = list[i], pts = dayPoints(d, i, list);
@@ -172,10 +182,21 @@ async function ensureRoutes() {
   }
   drawRoutes(); updateStats();
   if (typeof renderCostTop === "function" && state.costs) renderCostTop();   // Spritkosten hängen an den km
+  if (ferryNews.length) { notice("⛴ " + ferryNews.join(" · ")); ferryNews = []; }
+  if (typeof ensureOsm === "function") ensureOsm();                          // Tankstellen & Trinkwasser
 }
 function applyRoute(d, r) {
   d.km = Math.round(r.km);
   d.hours = Math.round((r.h + r.ferryH) * 20) / 20;
+  if (!r.ferries) return;
+  // Fähren zählt jetzt die Routenberechnung; neue Fähren nach einer Änderung melden
+  const names = r.ferries.map(f => f.name), old = d.ferryNames;
+  if (Array.isArray(old)) {
+    const added = names.filter(n => !old.includes(n)), gone = old.filter(n => !names.includes(n));
+    if (added.length) ferryNews.push(`${fmtDate(d.date)}, ${d.title}: neue Fähre ${added.join(", ")}`);
+    if (gone.length) ferryNews.push(`${fmtDate(d.date)}, ${d.title}: keine Fähre mehr ${gone.join(", ")}`);
+  }
+  d.ferryNames = names; d.ferries = names.length;
 }
 function routeFor(d) {
   const list = sortedDays(), i = list.findIndex(x => x.id === d.id);
@@ -260,6 +281,7 @@ function drawMarkers() {
     m.addTo(markerLayer); markers[d.id] = m;
   });
   if (typeof drawStops === "function") drawStops();          // Stopps des gewählten Tages (stops.js)
+  if (typeof drawOsm === "function") drawOsm();              // Tankstellen & Wasser des gewählten Tages (osm.js)
 }
 function fitAll() {
   const b = L.latLngBounds([[home().lat, home().lon]]);
@@ -343,7 +365,9 @@ function dayHtml(d, idx, list) {
     drive = (st === "err" ? `<span class="err">Routing fehlgeschlagen – Planwerte:</span>` : "") +
       (d.km ? `<span>ca. ${num(d.km)} km</span>` : "") + (d.hours ? `<span>${fmtH(d.hours)}</span>` : "");
   }
-  if (d.ferries) drive += `<span class="ferry">${d.ferries} ${d.ferries === 1 ? "Fähre" : "Fähren"}</span>`;
+  const fl = r?.ferries;
+  if (fl?.length) drive += `<span class="ferry" title="${esc(fl.map(f => `${f.name} (ca. ${f.min} min)`).join(" · "))}">⛴ ${fl.length} ${fl.length === 1 ? "Fähre" : "Fähren"}: ${esc(fl.map(f => f.name).join(", "))}</span>`;
+  else if (!fl && d.ferries) drive += `<span class="ferry">${d.ferries} ${d.ferries === 1 ? "Fähre" : "Fähren"}</span>`;
   let h = `<li class="day${d.id === selDay ? " sel" : ""}" data-day="${esc(d.id)}" tabindex="0">
     <span class="d"><span class="grip" title="Ziehen zum Verschieben" aria-hidden="true">⠿</span><b>${fmtDate(d.date)}</b><small>${isNaN(dt) ? "" : DAY_NAMES[dt.getDay()] + " · "}Tag ${dayNo(d.date)}</small></span>
     <span class="body"><span class="t">${esc(d.title || "Ohne Titel")}</span>
@@ -355,6 +379,7 @@ function dayHtml(d, idx, list) {
       ${d.warn ? `<span class="w">${esc(d.warn)}</span>` : ""}
       ${editingDay !== d.id ? `<span class="acts">
         ${pts.length > 1 ? `<a class="btn go mini" href="${esc(mapsUrl(pts))}" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>` : ""}
+        ${hasPos(d) && !/zu hause/i.test(d.night || "") ? `<a class="btn ghost mini" href="https://park4night.com/de/search?lat=${d.lat}&lng=${d.lon}&z=12" target="_blank" rel="noopener noreferrer" title="Stellplätze rund um ${esc(d.night)} bei park4night ansehen">park4night ↗</a>` : ""}
         <button type="button" class="btn ghost mini" data-edit="${esc(d.id)}">Bearbeiten</button>
         <span class="movebtns"><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:-1" aria-label="Tag nach oben"${idx === 0 ? " disabled" : ""}>↑</button><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:1" aria-label="Tag nach unten"${idx === list.length - 1 ? " disabled" : ""}>↓</button></span>
         <button type="button" class="btn ghost mini" data-extend="${esc(d.id)}" title="Eine weitere Nacht am selben Ort – alle folgenden Tage rücken einen Tag nach hinten">+ Nacht</button>
@@ -369,7 +394,7 @@ function editForm(d) {
     <label class="lbl">Etappe<input type="text" name="title" maxlength="80" value="${esc(d.title)}"></label>
     <div class="two">
       <label class="lbl">Datum<input type="date" name="date" value="${esc(d.date)}"></label>
-      <label class="lbl">Fähren<input type="number" name="ferries" min="0" max="9" value="${d.ferries ?? 0}"></label>
+      <span class="lbl">Fähren<span class="hint">werden automatisch aus der Route erkannt</span></span>
     </div>
     <label class="lbl">Strecke / Beschreibung<input type="text" name="sub" maxlength="140" value="${esc(d.sub)}"></label>
     <div class="inline">
@@ -515,7 +540,6 @@ $("#days").addEventListener("submit", async e => {
     const oldNight = d.night, newNight = f.night.value.trim();
     Object.assign(d, {
       title: f.elements.title.value.trim(), date: f.date.value || d.date, sub: f.sub.value.trim(),
-      ferries: Math.max(0, parseInt(f.ferries.value, 10) || 0),
       todo: f.todo.value.trim(), warn: f.warn.value.trim(), via
     });
     if (pos) { d.lat = pos.lat; d.lon = pos.lon; }
@@ -562,13 +586,7 @@ $("#fileImport").addEventListener("change", async e => {
   } catch (x) { notice("Laden fehlgeschlagen: " + esc(x.message)); }
   e.target.value = "";
 });
-$("#btnReset").addEventListener("click", async () => {
-  if (!confirm("Alle Änderungen in diesem Browser verwerfen und die Ausgangsdaten (daten.json) laden?")) return;
-  try { state = await loadDefault(); }
-  catch { notice("Hier gibt es keine Ausgangsdaten (daten.json liegt nur auf deinem PC). Lade stattdessen eine Sicherung mit „Laden“."); return; }
-  save(); selDay = editingDay = null; refresh(); fitAll();
-  notice("Ausgangsdaten geladen.");
-});
+// „Zurücksetzen“ gibt es nicht mehr: die lokale daten.json ist veraltet, ältere Stände kommen aus „Sicherungen“.
 
 /* ================= Start ================= */
 const appReady = (async function init() {
