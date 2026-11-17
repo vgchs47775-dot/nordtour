@@ -3,7 +3,11 @@
 
 (function () {
   const bar = document.getElementById("updbar");
+  const t0 = Date.now();
   function showUpdate(reg) {
+    // Direkt nach dem Öffnen ist noch nichts bearbeitet → neue Version sofort übernehmen.
+    // Kommt sie erst während der Nutzung, entscheidet die Person über den Hinweis.
+    if (Date.now() - t0 < 8000 && reg.waiting) { reg.waiting.postMessage("skipWaiting"); return; }
     if (!bar) return;
     bar.hidden = false;
     bar.querySelector("button").onclick = () => {
@@ -11,6 +15,12 @@
     };
   }
   if ("serviceWorker" in navigator) {
+    // Versionsnummer unten auf der Seite anzeigen
+    navigator.serviceWorker.addEventListener("message", e => {
+      const el = document.getElementById("appver");
+      if (el && e.data?.version) el.textContent = "Version " + (e.data.version.startsWith("__") ? "lokal" : e.data.version);
+    });
+    navigator.serviceWorker.ready.then(r => (navigator.serviceWorker.controller || r.active)?.postMessage("version"));
     let reloading = false;
     navigator.serviceWorker.addEventListener("controllerchange", () => { if (!reloading) { reloading = true; location.reload(); } });
     navigator.serviceWorker.register("sw.js").then(reg => {

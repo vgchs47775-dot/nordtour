@@ -112,7 +112,7 @@ function renderJournal() {
       <h3>${fmtDate(d.date)} · Tag ${dayNo(d.date)} · ${esc(d.title || "")}</h3>
       <textarea data-jtext="${esc(d.id)}" rows="3" placeholder="Was habt ihr heute erlebt?">${esc(j.text || "")}</textarea>
       <div class="jphotos">
-        ${(j.photos || []).map(p => `<button type="button" class="jthumb" data-jphoto="${esc(d.id)}:${esc(p.id)}" aria-label="Foto ansehen${p.caption ? ": " + esc(p.caption) : ""}"><img data-path="${esc(p.path)}" alt="${esc(p.caption || "")}" loading="lazy"></button>`).join("")}
+        ${(j.photos || []).map(p => `<button type="button" class="jthumb" data-jphoto="${esc(d.id)}:${esc(p.id)}" aria-label="Foto ansehen${p.caption ? ": " + esc(p.caption) : ""}"><img data-path="${esc(p.path)}" alt="${esc(p.caption || "")}" loading="lazy" onerror="this.parentElement.classList.add('broken')"></button>`).join("")}
         ${qs.map(q => `<span class="jthumb queued" title="wartet auf das Hochladen"><img src="${q.url}" alt=""><i>⏳</i></span>`).join("")}
         <label class="jadd" title="Fotos hinzufügen">＋ Fotos<input type="file" accept="image/*" multiple data-jfile="${esc(d.id)}" hidden></label>
       </div>

@@ -41,7 +41,10 @@ self.addEventListener("activate", e => {
     await self.clients.claim();
   })());
 });
-self.addEventListener("message", e => { if (e.data === "skipWaiting") self.skipWaiting(); });
+self.addEventListener("message", e => {
+  if (e.data === "skipWaiting") self.skipWaiting();
+  if (e.data === "version") e.source?.postMessage({ version: VERSION });
+});
 
 async function trim(name, max) {
   const c = await caches.open(name), keys = await c.keys();
