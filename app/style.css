@@ -373,3 +373,20 @@ table.sky tr:last-child td { border-bottom: 0; }
 .deps .times span { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
 .tollrow { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; align-items: end; }
 @media (max-width: 520px) { .tollrow { grid-template-columns: 1fr; } }
+.crow.ph { background: var(--bg); grid-template-columns: 34px 1fr auto 0; }
+.crow.ph .nm { color: var(--muted); }
+
+/* Fähren abgleichen */
+.fcheck { margin-bottom: 12px; display: grid; gap: 8px; }
+.fcheck h3 { margin: 0; }
+.flist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.flist li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding: 8px 10px; background: var(--bg); border-radius: 8px; }
+
+/* Polarlicht jetzt */
+.aurora { display: grid; grid-template-columns: minmax(220px, 360px) 1fr; gap: 14px; margin-bottom: 14px; align-items: start; }
+@media (max-width: 640px) { .aurora { grid-template-columns: 1fr; } }
+.aurora-img img { width: 100%; height: auto; border-radius: 10px; display: block; background: #000; }
+.aurora-txt { display: grid; gap: 8px; align-content: start; }
+.aurora-txt h3 { margin: 0; }
+.alist { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.alist li { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }

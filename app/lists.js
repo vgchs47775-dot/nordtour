@@ -83,6 +83,12 @@ function showView() {
 window.addEventListener("hashchange", showView);
 
 /* ================= Kosten ================= */
+// Leere Übernachtungs-Platzhalter aus der alten Planung (Unterkunft ohne Betrag, Notiz, Häkchen):
+// Die meisten Nächte wird wild gecampt – solche Posten werden zusammengefasst statt einzeln gezeigt.
+const isNightPlaceholder = c => c.cat === "Unterkunft" && c.amount == null && !c.note && !c.done;
+// „Maut Norwegen“ ohne Betrag ersetzt die automatische Schätzung
+const isTollPlaceholder = c => c.cat === "Maut" && c.amount == null && /^maut norwegen$/i.test(c.title || "") && main().autoToll;
+let showNightPh = false;
 function fuelCost() { const m = main(); return routeTotals().km * (Number(m.consumption) || 0) / 100 * (Number(m.fuelPrice) || 0); }
 function costSummary() {
   const m = main(), persons = Math.max(1, parseInt(m.persons, 10) || 1);
@@ -91,7 +97,7 @@ function costSummary() {
   for (const c of state.costs) {
     const a = Number(c.amount) || 0;
     byCat[COST_COLOR[c.cat] ? c.cat : "Sonstiges"] += a; total += a; if (!c.done) open += a;
-    if (c.amount == null) missing++;
+    if (c.amount == null && !isNightPlaceholder(c) && !isTollPlaceholder(c)) missing++;
   }
   if (m.autoFuel) { const f = fuelCost(); byCat.Sprit += f; total += f; open += f; }
   if (m.autoToll && typeof tollTotals === "function") { const t = tollTotals().eur; byCat.Maut += t; total += t; open += t; }
@@ -121,11 +127,13 @@ function renderCosts() {
   const dayById = Object.fromEntries(state.days.map(d => [d.id, d]));
   let html = "";
   for (const [cat, col] of COST_CATS) {
-    const rows = state.costs.filter(c => (COST_COLOR[c.cat] ? c.cat : "Sonstiges") === cat)
+    const all = state.costs.filter(c => (COST_COLOR[c.cat] ? c.cat : "Sonstiges") === cat);
+    const ph = all.filter(isNightPlaceholder);
+    const rows = all.filter(c => (showNightPh || !isNightPlaceholder(c)))
       .sort((a, b) => String(dayById[a.dayId]?.date || "9").localeCompare(String(dayById[b.dayId]?.date || "9")));
     const autoToll = cat === "Maut" && m.autoToll && typeof tollTotals === "function";
     const auto = (cat === "Sprit" && m.autoFuel) || autoToll;
-    if (!rows.length && !auto) continue;
+    if (!rows.length && !auto && !ph.length) continue;
     html += `<details class="group" data-ccat="${esc(cat)}"${openCostGroups.has(cat) ? " open" : ""}>
       <summary><span class="dot" style="background:${col}"></span>${esc(cat)}<span class="cnt">${euro(s.byCat[cat])}</span></summary><div class="rows">`;
     if (autoToll) {
@@ -143,9 +151,12 @@ function renderCosts() {
         ${rmBtn("costs", c.id, c.title)}
       </div>`;
     }).join("");
+    if (ph.length) html += `<div class="crow ph"><span></span><span class="nm">${ph.length} Nächte ohne Unterkunft – Wildcampen<span class="nt">leere Platzhalter aus der alten Planung, zählen nicht als „ohne Betrag“</span></span>
+      <span class="acts"><button type="button" class="btn ghost mini" data-phtoggle>${showNightPh ? "ausblenden" : "einzeln zeigen"}</button><button type="button" class="btn ghost mini" data-phdel>alle entfernen</button></span><span></span></div>`;
     html += `</div></details>`;
   }
   $("#costGroups").innerHTML = html || `<p class="empty">Noch keine Kosten eingetragen.</p>`;
+  if (typeof renderFerryCheck === "function") renderFerryCheck();
 }
 document.addEventListener("change", e => {
   const t = e.target.closest("[data-amount]");
@@ -170,6 +181,16 @@ $("#fuelForm").addEventListener("submit", e => {
 });
 $("#sAuto").addEventListener("change", () => $("#fuelForm").requestSubmit());
 $("#sAutoToll").addEventListener("change", () => $("#fuelForm").requestSubmit());
+
+document.addEventListener("click", e => {
+  if (e.target.closest("[data-phtoggle]")) { showNightPh = !showNightPh; renderCosts(); return; }
+  if (e.target.closest("[data-phdel]")) {
+    const n = state.costs.filter(isNightPlaceholder).length;
+    if (!confirm(`${n} leere Übernachtungs-Posten entfernen? Nächte mit Betrag oder Notiz bleiben erhalten.`)) return;
+    state.costs = state.costs.filter(c => !isNightPlaceholder(c)); showNightPh = false; commit(); updateStats();
+    notice(`${n} leere Übernachtungs-Posten entfernt. Eine Unterkunft trägst du bei Bedarf unten unter „Neuer Kostenposten“ mit Kategorie Unterkunft und dem Tag ein.`);
+  }
+});
 
 /* ================= To-dos ================= */
 function renderTodos() {

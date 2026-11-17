@@ -104,6 +104,7 @@
     <h2 id="h-himmel">Nachthimmel &amp; Polarlicht</h2>
     <p class="lead">Für jede Übernachtung berechnet: wann die Sonne untergeht, wie lange es dunkel genug für Polarlicht wird (Sonne tiefer als 8° unter dem Horizont) und welcher Kp-Index nötig ist, damit es dort sichtbar wird. Dazu die aktuelle Prognose der NOAA. Ob es wirklich leuchtet, entscheiden am Ende Sonnenaktivität und Wolken.</p>
     <div class="sky-best" id="skyNow"></div>
+    <div id="auroraNow"></div>
     <div class="sky-best" id="skyBest"></div>
     <div class="panel tablewrap"><table class="sky" id="skyTable"></table></div>
     <p class="hint spaced">Kp-Index: Maß für die geomagnetische Aktivität von 0 (ruhig) bis 9 (extremer Sturm). Kp 1–3 kommt in den meisten Nächten vor, Kp 5 und mehr nur bei Sonnenstürmen. Ein heller Mond (über 60 % beleuchtet) schwächt schwache Polarlichter ab. Zeiten in Sommerzeit (MESZ). Prognose: 3-Tage-Werte der NOAA für das dunkle Fenster, sonst der größte Kp aus dem 27-Tage-Ausblick. Quelle: <a href="https://www.swpc.noaa.gov/" target="_blank" rel="noopener">NOAA Space Weather Prediction Center</a>.</p>
@@ -149,6 +150,7 @@
         <div class="acts"><button class="btn mini" type="submit">Übernehmen</button><span class="formerr" id="fErr"></span></div>
       </form>
     </div>
+    <div id="ferryCheck"></div>
     <p class="hint spaced">Beträge direkt ins Feld tippen – gespeichert wird beim Verlassen des Felds. Häkchen = bezahlt.</p>
     <div id="costGroups"></div>
     <form class="add" id="addCost" autocomplete="off">
@@ -275,9 +277,11 @@
 <script src="stops.js"></script>
 <script src="osm.js"></script>
 <script src="toll.js"></script>
+<script src="ferrycost.js"></script>
 <script src="ferries.js"></script>
 <script src="lists.js"></script>
 <script src="sky.js"></script>
+<script src="aurora.js"></script>
 <script src="journal.js"></script>
 <script src="sync.js"></script>
 <script src="cache.js"></script>
