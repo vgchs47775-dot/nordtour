@@ -291,10 +291,13 @@ table.sky tr:last-child td { border-bottom: 0; }
 
 /* Tage verschieben & Stopps */
 .day .d { position: relative; }
-.grip { display: block; width: 28px; margin: -2px 0 2px -4px; color: var(--muted); font-size: 18px; line-height: 1; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; padding: 2px 4px; border-radius: 6px; }
+.grip { display: none; width: 28px; margin: -2px 0 2px -4px; color: var(--muted); font-size: 18px; line-height: 1; cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; padding: 2px 4px; border-radius: 6px; }
 .grip:hover { background: var(--bg); color: var(--ink); }
 .drag-ghost { opacity: .4; }
-.movebtns { display: inline-flex; gap: 2px; }
+.movebtns { display: none; gap: 2px; }
+#days.reorder .grip { display: block; }
+#days.reorder .movebtns { display: inline-flex; }
+#days.reorder .day { border-style: dashed; }
 .movebtns .btn { padding: 5px 8px; }
 .day .stops { font-size: 13px; color: var(--sun); font-weight: 600; }
 .stmk { width: 20px; height: 20px; border-radius: 50%; background: #fff; color: #e2731b; border: 2.5px solid #e2731b; display: grid; place-items: center; font: 700 10px/1 var(--font-body); box-shadow: 0 1px 3px rgba(0,0,0,.35); }

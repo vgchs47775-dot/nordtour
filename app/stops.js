@@ -38,10 +38,21 @@ function extendNight(id) {
 }
 
 /* ---------- Drag & Drop in der Etappenliste (SortableJS, funktioniert auch per Touch) ---------- */
+// Verschieben ist nur im Modus „Reihenfolge ändern“ möglich – so kann nichts aus Versehen verrutschen.
+let sorter = null, reorderMode = false;
+function setReorder(on) {
+  reorderMode = on;
+  $("#days").classList.toggle("reorder", on);
+  sorter?.option("disabled", !on);
+  const b = $("#btnReorder");
+  b.textContent = on ? "✓ Fertig" : "Reihenfolge ändern";
+  b.classList.toggle("go", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+  if (on) notice("Reihenfolge ändern: Tage am Griff ⠿ ziehen oder mit ↑/↓ verschieben. Danach auf „Fertig“ klicken.");
+  else if (!$("#notice").hidden && /^Reihenfolge ändern/.test($("#notice").textContent)) $("#notice").hidden = true;
+}
 function initSortable() {
-  if (!window.Sortable) return;
-  Sortable.create($("#days"), {
-    handle: ".grip", animation: 150, ghostClass: "drag-ghost", delay: 0,
+  if (window.Sortable) sorter = Sortable.create($("#days"), {
+    handle: ".grip", animation: 150, ghostClass: "drag-ghost", disabled: true,
     onEnd(e) {
       if (e.oldIndex === e.newIndex) return;
       undoSnap = JSON.stringify(state.days);
@@ -50,6 +61,7 @@ function initSortable() {
       notice("Tag verschoben – die Daten wurden angepasst, die Routen werden neu berechnet.", true);
     }
   });
+  $("#btnReorder").addEventListener("click", () => setReorder(!reorderMode));
 }
 
 /* ---------- Stopps auf der Karte ---------- */
