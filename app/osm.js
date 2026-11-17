@@ -100,6 +100,7 @@ async function ensureOsm() {
   if (osmBusy || !navigator.onLine) return;
   osmBusy = true;
   try {
+    if (typeof waitCloudCache === "function") await waitCloudCache();
     const list = sortedDays();
     for (let i = 0; i < list.length; i++) {
       const d = list[i], pts = dayPoints(d, i, list); if (pts.length < 2) continue;
@@ -107,7 +108,10 @@ async function ensureOsm() {
       if (!r || osmData[key] || !r.km) continue;
       if (osmStatus[key]?.retry > Date.now()) continue;              // nach einem Fehler erst später wieder
       osmStatus[key] = "busy"; renderDay(d.id);
-      try { osmData[key] = await loadOsmFor(d, pts, r); delete osmStatus[key]; saveOsm(); }
+      try {
+        osmData[key] = await loadOsmFor(d, pts, r); delete osmStatus[key]; saveOsm();
+        if (typeof cacheUp === "function") cacheUp("osm", key, osmData[key]);   // mit anderen Geräten teilen
+      }
       catch (e) {
         // Server überlastet o. Ä.: diese Runde beenden und später alles Fehlende erneut versuchen
         osmStatus[key] = { retry: Date.now() + 10 * 60e3 }; console.warn("Overpass", d.id, e);

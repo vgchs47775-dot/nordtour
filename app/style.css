@@ -364,3 +364,10 @@ table.sky tr:last-child td { border-bottom: 0; }
   .grip { font-size: 24px; padding: 6px 8px; }
   input[type=text], input[type=number], input[type=date], input[type=email], input[type=password], input[type=url], select, textarea { font-size: 16px; }   /* iOS zoomt sonst beim Antippen */
 }
+
+/* Fähr-Abfahrten */
+.deps { display: grid; gap: 8px; background: var(--bg); border-radius: 8px; padding: 8px 10px; font-size: 13px; }
+.deps .dep { display: grid; gap: 2px; }
+.deps .muted, .deps.muted { color: var(--muted); font-weight: 400; }
+.deps .times { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.deps .times span { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; font-variant-numeric: tabular-nums; }

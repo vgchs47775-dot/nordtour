@@ -10,8 +10,8 @@ const tripStart = () => sortedDays()[0]?.date || new Date().toISOString().slice(
 const LONG_DAY = 6;                 // Stunden, ab denen ein Fahrtag als lang gilt
 const FERRY_KMH = 28;               // Schätzung für eingetragene Fährstrecken (Luftlinie)
 const STORE = "nordtour.v1";
-const RSTORE = "nordtour.routes.v3";   // Version erhöhen, wenn sich das Routenformat ändert
-try { localStorage.removeItem("nordtour.routes.v1"); localStorage.removeItem("nordtour.routes.v2"); } catch { /* egal */ }
+const RSTORE = "nordtour.routes.v4";   // Version erhöhen, wenn sich das Routenformat ändert
+try { localStorage.removeItem("nordtour.routes.v1"); localStorage.removeItem("nordtour.routes.v2"); localStorage.removeItem("nordtour.routes.v3"); } catch { /* egal */ }
 const ROUTER = "https://valhalla1.openstreetmap.de/route?json=";
 const NOMI = "https://nominatim.openstreetmap.org/";
 const DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
@@ -125,17 +125,24 @@ function decodePolyline(str, prec = 6) {
 // Autoroute über den Valhalla-Server der FOSSGIS (OpenStreetMap-Daten, kein Schlüssel nötig).
 // Fähren im OSM-Netz (z. B. Puttgarden–Rødby, Fjordfähren) sind enthalten.
 async function routeCar(pts) {
-  const q = { locations: pts.map(p => ({ lat: +p.lat.toFixed(5), lon: +p.lon.toFixed(5) })),
+  // exclude_ferry: Wegpunkte nie mitten auf einer Fährstrecke einrasten lassen (z. B. Punkt im Fjord)
+  const q = { locations: pts.map(p => ({ lat: +p.lat.toFixed(5), lon: +p.lon.toFixed(5), search_filter: { exclude_ferry: true } })),
     costing: "auto", units: "kilometers", directions_type: "maneuvers", language: "de-DE" };
   const r = await fetch(ROUTER + encodeURIComponent(JSON.stringify(q)));
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.trip) throw new Error(j.error || "Routing-Server antwortet mit " + r.status);
   // Fähren erkennen: Manöver-Typ 28 = „auf die Fähre fahren“; der Name steht oft im Straßennamen („Halhjem - Sandvikvåg“)
   const ferries = [];
-  for (const l of j.trip.legs) for (const m of l.maneuvers || []) if (m.type === 28) {
-    const names = m.street_names || [];
-    const nm = names.find(n => / - |–/.test(n)) || (names.length ? `Fähre auf der ${names[0]}` : "Fähre");
-    ferries.push({ name: nm.replace(/\s+-\s+/g, "–"), min: Math.round(m.time / 60) });
+  for (const l of j.trip.legs) {
+    let shape = null;
+    for (const m of l.maneuvers || []) if (m.type === 28) {
+      const names = m.street_names || [];
+      const nm = names.find(n => / - |–/.test(n)) || (names.length ? `Fähre auf der ${names[0]}` : "Fähre");
+      shape = shape || decodePolyline(l.shape);
+      const at = i => shape[Math.min(i, shape.length - 1)].map(v => +v.toFixed(4));
+      // Anfang und Ende der Überfahrt – für die Abfahrtszeiten (ferries.js)
+      ferries.push({ name: nm.replace(/\s+-\s+/g, "–"), min: Math.round(m.time / 60), from: at(m.begin_shape_index), to: at(m.end_shape_index) });
+    }
   }
   return { km: j.trip.summary.length, h: j.trip.summary.time / 3600, encs: j.trip.legs.map(l => l.shape), ferries };
 }
@@ -159,7 +166,8 @@ async function computeRoute(pts) {
       const km = hav(a, b);
       res.ferryKm += km; res.ferryH += km / FERRY_KMH;
       res.parts.push({ ferry: true, pts: [[a.lat, a.lon], [b.lat, b.lon]] });
-      res.ferries.push({ name: `${a.name || "Fähre"} – ${b.name || ""}`.replace(/ – $/, ""), min: Math.round(km / FERRY_KMH * 60), manual: true });
+      res.ferries.push({ name: `${a.name || "Fähre"} – ${b.name || ""}`.replace(/ – $/, ""), min: Math.round(km / FERRY_KMH * 60), manual: true,
+        from: [+a.lat.toFixed(4), +a.lon.toFixed(4)], to: [+b.lat.toFixed(4), +b.lon.toFixed(4)] });
       run = [b];
     } else run.push(b);
   }
@@ -170,6 +178,8 @@ let routeGen = 0;
 let ferryNews = [];
 async function ensureRoutes() {
   const gen = ++routeGen;
+  if (typeof waitCloudCache === "function") await waitCloudCache();   // erst schauen, ob ein anderes Gerät schon gerechnet hat
+  if (gen !== routeGen) return;
   const list = sortedDays();
   ferryNews = [];
   for (let i = 0; i < list.length; i++) {
@@ -183,6 +193,7 @@ async function ensureRoutes() {
     try {
       const r = await computeRoute(pts);
       routes[key] = r; delete routeStatus[d.id];
+      if (typeof cacheUp === "function") cacheUp("route", key, r);     // mit anderen Geräten teilen
       applyRoute(d, r); saveRoutes(); save();
     } catch (e) {
       routeStatus[d.id] = navigator.onLine ? "err" : "offline"; console.warn("Routing", d.id, e);
@@ -383,6 +394,7 @@ function dayHtml(d, idx, list) {
     <span class="body"><span class="t">${esc(d.title || "Ohne Titel")}</span>
       ${d.sub ? `<span class="s">${esc(d.sub)}</span>` : ""}
       <span class="drive">${drive}</span>
+      ${typeof ferryHtml === "function" ? ferryHtml(d, r) : ""}
       ${d.night ? `<span class="night">${esc(d.night)}</span>` : ""}
       ${typeof dayExtrasHtml === "function" ? dayExtrasHtml(d, r) : ""}
       ${d.todo ? `<span class="todo">${esc(d.todo).replace(/\n/g, "<br>")}</span>` : ""}

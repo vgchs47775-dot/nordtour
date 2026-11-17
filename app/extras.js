@@ -74,11 +74,12 @@ async function ensurePanoRoutes() {
   if (!EXTRAS || panoBusy) return;
   const gen = ++panoGen; panoBusy = true;
   try {
+    if (typeof waitCloudCache === "function") await waitCloudCache();
     for (const p of PANO()) for (const c of panoCompare(p)) for (const pts of [c.base, c.with]) {
       if (gen !== panoGen) return;
       const k = routeKey(pts);
       if (routes[k]) continue;
-      try { routes[k] = await computeRoute(pts); saveRoutes(); } catch (e) { console.warn("Panorama-Vergleich", p.id, e); }
+      try { routes[k] = await computeRoute(pts); saveRoutes(); if (typeof cacheUp === "function") cacheUp("route", k, routes[k]); } catch (e) { console.warn("Panorama-Vergleich", p.id, e); }
       renderPano();
     }
   } finally { panoBusy = false; renderPano(); }
