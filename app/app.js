@@ -46,6 +46,7 @@ function loadRoutes() { try { routes = JSON.parse(localStorage.getItem(RSTORE)) 
 function saveRoutes() {
   // nur Routen behalten, die aktuell gebraucht werden
   const used = new Set(sortedDays().map((d, i, l) => routeKey(dayPoints(d, i, l))));
+  if (typeof extraRouteKeys === "function") extraRouteKeys().forEach(k => used.add(k));   // Vergleichsrouten
   for (const k of Object.keys(routes)) if (!used.has(k)) delete routes[k];
   try { localStorage.setItem(RSTORE, JSON.stringify(routes)); } catch { /* Cache ist optional */ }
 }
@@ -58,10 +59,13 @@ async function loadDefault() {
 /* ================= Tage & Wegpunkte ================= */
 function sortedDays() { return [...state.days].sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.order ?? 0) - (b.order ?? 0)); }
 function hasPos(p) { return p && typeof p.lat === "number" && typeof p.lon === "number"; }
-function dayPoints(d, idx, list) {
+// viaOverride: andere Zwischenziele (z. B. zum Vergleich ohne Panoramastraße); sonst gelten
+// eingeplante Panoramastraßen (extras.js), sonst die Zwischenziele des Tages.
+function dayPoints(d, idx, list, viaOverride) {
   const prev = idx > 0 ? list[idx - 1] : null;
   const start = prev && hasPos(prev) ? { name: prev.night, lat: prev.lat, lon: prev.lon } : home();
-  const pts = [start, ...(d.via || []).filter(hasPos)];
+  const via = viaOverride !== undefined ? viaOverride : (typeof panoVia === "function" && panoVia(d)) || d.via || [];
+  const pts = [start, ...via.filter(hasPos)];
   if (hasPos(d)) pts.push({ name: d.night, lat: d.lat, lon: d.lon });
   return pts;
 }
@@ -309,6 +313,7 @@ function dayHtml(d, idx, list) {
       ${d.sub ? `<span class="s">${esc(d.sub)}</span>` : ""}
       <span class="drive">${drive}</span>
       ${d.night ? `<span class="night">${esc(d.night)}</span>` : ""}
+      ${typeof dayExtrasHtml === "function" ? dayExtrasHtml(d, r) : ""}
       ${d.todo ? `<span class="todo">${esc(d.todo).replace(/\n/g, "<br>")}</span>` : ""}
       ${d.warn ? `<span class="w">${esc(d.warn)}</span>` : ""}
       ${editingDay !== d.id ? `<span class="acts">
@@ -525,6 +530,7 @@ $("#btnReset").addEventListener("click", async () => {
 /* ================= Start ================= */
 const appReady = (async function init() {
   loadRoutes();
+  if (typeof loadExtras === "function") await loadExtras();   // Panoramastraßen & Ziele (extras.js)
   state = loadLocal();
   if (!state) {
     // daten.json gibt es nur lokal (sie wird nicht auf GitHub hochgeladen)

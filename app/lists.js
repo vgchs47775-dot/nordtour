@@ -72,7 +72,7 @@ const findItem = (kind, id) => coll(kind)?.find(x => x.id === id);
 function commit() { save(); renderLists(); }
 
 /* ================= Reiter ================= */
-const VIEWS = ["route", "kosten", "todos", "packen", "kaufen"];
+const VIEWS = ["route", "panorama", "erleben", "kosten", "todos", "packen", "kaufen"];
 function showView() {
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "route";
   for (const x of VIEWS) $("#v-" + x).hidden = x !== v;
@@ -353,6 +353,7 @@ function renderLists() {
   const cur = $("#kDay").value;
   $("#kDay").innerHTML = `<option value="">– kein Tag –</option>` + sortedDays().map(d => `<option value="${esc(d.id)}"${d.id === cur ? " selected" : ""}>${fmtDate(d.date)} · ${esc(d.night || d.title)}</option>`).join("");
   renderCosts(); renderTodos(); renderPack(); renderBuy();
+  if (typeof renderExtras === "function") renderExtras();
   const openTodos = state.todos.filter(t => !t.done).length;
   $("#nTodo").textContent = openTodos;
   $("#nPack").textContent = state.pack.filter(i => !i.done).length;

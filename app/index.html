@@ -28,6 +28,8 @@
 
   <nav class="tabs" aria-label="Bereiche">
     <a href="#route" data-view="route">Route</a>
+    <a href="#panorama" data-view="panorama">Panoramastraßen <span class="n" id="nPano">0</span></a>
+    <a href="#erleben" data-view="erleben">Erleben <span class="n" id="nSights">0</span></a>
     <a href="#kosten" data-view="kosten">Kosten</a>
     <a href="#todos" data-view="todos">To-dos <span class="n" id="nTodo">0</span></a>
     <a href="#packen" data-view="packen">Packliste <span class="n" id="nPack">0</span></a>
@@ -40,7 +42,7 @@
     <div class="mapbox">
       <div id="map" aria-label="Karte der Route. Übernachtungsorte lassen sich mit der Maus oder dem Finger verschieben."></div>
       <div class="map-foot">
-        <div class="legend"><span>Übernachtung (Tag)</span><span class="r">Route (live)</span><span class="f">Fähre (Schätzung)</span><span class="g">noch nicht berechnet</span></div>
+        <div class="legend"><span>Übernachtung (Tag)</span><span class="r">Route (live)</span><span class="f">Fähre (Schätzung)</span><span class="p">Panoramastraße</span><span class="s">Sehenswürdigkeit</span></div>
         <span class="map-note">Marker ziehen = Übernachtung verschieben</span>
       </div>
     </div>
@@ -64,6 +66,26 @@
         <p class="formerr" id="nErr"></p>
       </form>
     </div>
+  </section>
+
+  <!-- PANORAMA -->
+  <section id="v-panorama" hidden aria-labelledby="h-pano">
+    <div class="toolbar">
+      <h2 id="h-pano">Panoramastraßen an deiner Route</h2>
+      <span class="toggle" id="panoSum"></span>
+    </div>
+    <p class="lead">Norwegens Nationale Touristenstraßen und zwei schwedische Klassiker, sortiert nach Reisetag. Mit „Einplanen“ wird die Etappe live über die Panoramastraße berechnet; der Umweg steht jeweils grün darunter.</p>
+    <div class="cards" id="panoCards"></div>
+  </section>
+
+  <!-- ERLEBEN -->
+  <section id="v-erleben" hidden aria-labelledby="h-erleben">
+    <div class="toolbar">
+      <h2 id="h-erleben">Sehenswürdigkeiten &amp; Wanderungen</h2>
+      <div class="acts"><span class="toggle" id="sightSum"></span><label class="toggle"><input type="checkbox" id="sightOnly"> Nur Eingeplantes</label></div>
+    </div>
+    <p class="lead">Ziele an deiner Strecke, nach Reisetag sortiert. Eingeplantes erscheint beim Tag mit Besuchszeit und Umweg. Alle Zeiten sind grobe Richtwerte.</p>
+    <div id="sightList"></div>
   </section>
 
   <!-- KOSTEN -->
@@ -191,6 +213,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="config.js"></script>
+<script src="extras.js"></script>
 <script src="app.js"></script>
 <script src="lists.js"></script>
 <script src="sync.js"></script>

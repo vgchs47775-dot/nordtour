@@ -213,5 +213,55 @@ input[type=url] { width: 100%; border: 1px solid var(--line); border-radius: 8px
 .nolink { font-size: 13px; color: var(--muted); }
 .subhead { font-family: var(--font-display); font-weight: 700; font-size: 16px; margin: 22px 0 10px; color: var(--muted); }
 
+/* Panoramastraßen & Erleben */
+:root { --sight: #7d4fb0; --sight-soft: #efe6f8; }
+@media (prefers-color-scheme: dark) { :root { --sight: #b98ce6; --sight-soft: #2a2036; } }
+.lead { color: var(--muted); margin: -4px 0 16px; max-width: 70ch; }
+.legend .p::before { border-radius: 2px; background: #3d7a3a; width: 16px; height: 4px; vertical-align: 2px; }
+.legend .s::before { border-radius: 2px; background: #7d4fb0; width: 9px; height: 9px; transform: rotate(45deg); }
+.pano-card { border-left-color: var(--moss); }
+.pano-card.on { background: var(--moss-soft); }
+.sight-card { border-left-color: var(--sight); }
+.sight-card.on { background: var(--sight-soft); }
+.pano-card h3, .sight-card h4 { margin: 0; font-family: var(--font-display); font-size: 18px; }
+.sight-card h4 { font-size: 17px; }
+.card .meta { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.card .meta.delta { color: var(--moss); font-weight: 600; }
+.card p { margin: 0; font-size: 14px; }
+.pano-card .fit { font-size: 13px; color: var(--moss); font-weight: 600; }
+.btn.moss { background: var(--moss); color: var(--surface); }
+.btn.sight { background: var(--sight); color: var(--surface); }
+.sday { margin-bottom: 18px; }
+.sday h3 { font-family: var(--font-display); font-size: 16px; margin: 0 0 8px; color: var(--muted); font-weight: 700; }
+.day .pano { font-size: 13px; color: var(--moss); font-weight: 600; }
+.day .prog { font-size: 13px; color: var(--sight); font-weight: 600; }
+.day .total { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.day .total.long { color: var(--warn); font-weight: 600; }
+.gal { position: relative; margin: -4px -6px 2px; border-radius: 8px; overflow: hidden; background: var(--bg); }
+.gal img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: cover; }
+.gal figcaption { font-size: 11px; color: var(--muted); padding: 4px 6px; line-height: 1.3; }
+.gal figcaption a { color: inherit; }
+.gal-nav { position: absolute; top: calc(50% - 26px); width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(0,0,0,.45); color: #fff; font-size: 20px; line-height: 1; cursor: pointer; display: grid; place-items: center; padding: 0 0 2px; }
+.gal-nav:hover { background: rgba(0,0,0,.65); }
+.gal-nav.prev { left: 6px; } .gal-nav.next { right: 6px; }
+.gal-count { position: absolute; top: 6px; right: 6px; font-size: 11px; color: #fff; background: rgba(0,0,0,.45); border-radius: 8px; padding: 1px 7px; }
+/* Karte: Sehenswürdigkeiten, Popups, Ebenen-Knöpfe */
+.smk { width: 14px; height: 14px; background: #fff; border: 2.5px solid #7d4fb0; transform: rotate(45deg); border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+.smk.on { background: #7d4fb0; border-color: #fff; }
+.leaflet-popup-content { margin: 10px 12px; font-size: 13px; line-height: 1.45; }
+.leaflet-popup-content .pop { display: grid; gap: 4px; }
+.leaflet-popup-content .pop b { font-family: var(--font-display); font-size: 15px; }
+.leaflet-popup-content .pop span { color: #5a6d78; }
+.leaflet-popup-content .pop .tipdesc { color: #15232c; }
+.leaflet-popup-content .gal { margin: 0 0 4px; }
+.leaflet-popup-content .gal figcaption { color: #5a6d78; }
+.leaflet-popup-content .btn.ghost { color: #1f4e63; border-color: #d3dde2; }
+.leaflet-popup-content .btn.moss { background: #3d7a3a; color: #fff; }
+.leaflet-popup-content .btn.sight { background: #7d4fb0; color: #fff; }
+.map-layers button { display: block; width: 30px; height: 30px; border: 0; background: #fff; color: #15232c; font: 700 13px/30px var(--font-body); cursor: pointer; padding: 0; }
+.map-layers button + button { border-top: 1px solid #ccc; }
+.map-layers button[data-maplayer="pano"][aria-pressed="true"] { background: #3d7a3a; color: #fff; }
+.map-layers button[data-maplayer="sights"][aria-pressed="true"] { background: #7d4fb0; color: #fff; }
+
 .foot { margin-top: 28px; font-size: 12px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
