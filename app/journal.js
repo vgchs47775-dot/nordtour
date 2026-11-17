@@ -96,7 +96,9 @@ async function fillImages(root) {
 /* ---------- Anzeige ---------- */
 function renderJournal() {
   const el = document.getElementById("journalList"); if (!el || !state) return;
-  if (document.activeElement?.matches?.("[data-jtext]")) return;          // nicht beim Tippen neu zeichnen
+  // Steht der Cursor gerade in einem Textfeld, wird er nach dem Neuzeichnen wiederhergestellt
+  const ae = document.activeElement, focus = ae?.matches?.("[data-jtext]")
+    ? { id: ae.dataset.jtext, value: ae.value, a: ae.selectionStart, b: ae.selectionEnd, top: ae.scrollTop } : null;
   const only = $("#journalOnly")?.checked;
   const loggedIn = typeof sb !== "undefined" && sb && syncUser;
   $("#journalInfo").innerHTML = !loggedIn
@@ -116,6 +118,10 @@ function renderJournal() {
       </div>
     </article>`;
   }).join("") || `<p class="empty">${only ? "Noch keine Einträge." : "Noch keine Reisetage."}</p>`;
+  if (focus) {
+    const t = el.querySelector(`[data-jtext="${CSS.escape(focus.id)}"]`);
+    if (t) { t.value = focus.value; t.focus({ preventScroll: true }); t.setSelectionRange(focus.a, focus.b); t.scrollTop = focus.top; }
+  }
   fillImages(el);
   const n = Object.values(state.journal || {}).reduce((a, j) => a + (j.photos?.length || 0), 0);
   $("#journalSum").textContent = n ? `${n} Foto${n > 1 ? "s" : ""}` : "";
