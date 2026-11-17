@@ -256,8 +256,13 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 const routeLayer = L.layerGroup().addTo(map);
 const markerLayer = L.layerGroup().addTo(map);
 let markers = {};
-// Die OSM-Kacheln sind immer hell – daher feste, kräftige Linienfarben statt der Dunkelmodus-Töne.
-const COL = { route: "#1f4e63", sel: "#e2731b", ferry: "#e2731b", todo: "#5a6d78" };
+// Im Dunkelmodus wird die Karte per CSS abgedunkelt (style.css) – dann helle Linienfarben.
+const darkMQ = matchMedia("(prefers-color-scheme: dark)");
+const COL = {
+  get route() { return darkMQ.matches ? "#8ecae6" : "#1f4e63"; }, sel: "#f0913f", ferry: "#f0913f",
+  get todo() { return darkMQ.matches ? "#91a5b0" : "#5a6d78"; }
+};
+darkMQ.addEventListener?.("change", () => drawRoutes());
 // Leaflet misst die Kartengröße nur beim Start; bei jeder Größenänderung neu messen,
 // sonst werden Linien außerhalb des alten Ausschnitts abgeschnitten.
 new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById("map"));
@@ -310,7 +315,10 @@ function fitAll() {
   state.days.filter(hasPos).forEach(d => b.extend([d.lat, d.lon]));
   map.fitBounds(b, { padding: [20, 20] });
 }
-function zoomToDay(id) {
+function zoomToDay(id, tries = 0) {
+  // Karte gerade erst eingeblendet (iPad: Liste → Karte)? Erst neu messen, sonst rechnet Leaflet mit Größe 0
+  map.invalidateSize();
+  if (!map.getSize().x) { if (tries < 20) setTimeout(() => zoomToDay(id, tries + 1), 50); return; }
   const list = sortedDays(), i = list.findIndex(x => x.id === id); if (i < 0) return;
   const pts = dayPoints(list[i], i, list); if (!pts.length) return;
   const r = routes[routeKey(pts)];
@@ -348,11 +356,21 @@ function renameNight(d, oldName, name) {
 }
 
 /* ================= Anzeige ================= */
+// Reine Infos verschwinden nach 8 s, mit „Rückgängig“ nach 20 s; Hinweise mit Auswahl bleiben stehen.
+// Solange die Maus darüber ist bzw. der Finger darauf tippt, bleibt der Hinweis.
+let noticeTimer = null;
 function notice(html, withUndo = false, extraHtml = "") {
   const n = $("#notice");
   n.innerHTML = `<span>${html}</span>${withUndo && undoSnap ? `<button class="btn ghost mini" type="button" id="btnUndo">Rückgängig</button>` : ""}${extraHtml}<button class="btn ghost mini" type="button" id="btnHide">Ausblenden</button>`;
   n.hidden = false;
+  clearTimeout(noticeTimer);
+  n.dataset.ms = extraHtml ? 0 : withUndo && undoSnap ? 20000 : 8000;
+  if (+n.dataset.ms) noticeTimer = setTimeout(() => { n.hidden = true; }, +n.dataset.ms);
 }
+$("#notice").addEventListener("pointerenter", () => clearTimeout(noticeTimer));
+$("#notice").addEventListener("pointerleave", () => {
+  const n = $("#notice"); if (!n.hidden && +n.dataset.ms) noticeTimer = setTimeout(() => { n.hidden = true; }, 4000);
+});
 $("#notice").addEventListener("click", e => {
   if (e.target.id === "btnHide") $("#notice").hidden = true;
   if (e.target.id === "btnUndo" && undoSnap) {
@@ -366,51 +384,92 @@ function mapsUrl(pts) {
   return "https://www.google.com/maps/dir/?api=1&travelmode=driving&origin=" + encodeURIComponent(f(pts[0])) +
     "&destination=" + encodeURIComponent(f(pts[pts.length - 1])) + (via ? "&waypoints=" + encodeURIComponent(via) : "");
 }
-function viaText(via) { return (via || []).map(v => `${v.name}: ${v.lat}, ${v.lon}${v.ferry ? " (Fähre)" : ""}`).join("\n"); }
+// Kompakte Kärtchen: Kopfzeile mit den wichtigsten Angaben, Details erst beim Antippen
+const expandedDays = new Set();
+let allExpanded = false;
+function daySummary(d, r, st) {
+  const chips = [];
+  if (st === "busy") chips.push(`<span class="busy">Route wird berechnet …</span>`);
+  else if (st === "offline" && !r) chips.push(`<span class="busy">offline</span>`);
+  else if (r && r.km < 0.1 && !r.ferryKm) chips.push(`<span class="live">Ruhetag</span>`);
+  else if (r) {
+    const total = r.h + r.ferryH;
+    chips.push(`<span>${num(r.km)} km</span>`, `<span class="${total > LONG_DAY ? "long" : ""}">${fmtShortH(total)}</span>`);
+  } else if (d.km) chips.push(`<span>ca. ${num(d.km)} km</span>`);
+  if (st === "err") chips.push(`<span class="err">Routing fehlgeschlagen</span>`);
+  const fl = r?.ferries || [];
+  if (fl.length) chips.push(`<span class="ferry" title="${esc(fl.map(f => f.name).join(", "))}">⛴ ${fl.length}</span>`);
+  if (typeof osmFor === "function" && r) {
+    const { o } = osmFor(d);
+    if (o) { const g = fuelGaps(o); if (!o.fuel.length || g.km > FUEL_GAP_WARN) chips.push(`<span class="warnchip" title="Lange Strecke ohne Tankstelle">⛽ ${num(g.km)} km</span>`); }
+  }
+  if (typeof dayTolls === "function" && r?.tolls) { const n = dayTolls(r).length; if (n) chips.push(`<span title="Mautstellen in Norwegen">🛣 ${n}</span>`); }
+  const stops = (d.via || []).filter(v => v.stay > 0).length + (typeof dayProgram === "function" ? dayProgram(d).list.length : 0);
+  if (stops) chips.push(`<span class="prog" title="Stopps und eingeplante Ziele">📍 ${stops}</span>`);
+  if (typeof nightSky === "function" && !/zu hause/i.test(d.night || "")) {
+    const k = nightSky(d); if (k && (k.cls === "good" || k.cls === "mid")) chips.push(`<span class="chance ${k.cls}" title="Polarlicht-Chance">🌌</span>`);
+  }
+  if (d.warn) chips.push(`<span class="warnchip" title="${esc(d.warn)}">⚠</span>`);
+  return chips.join("");
+}
+const fmtShortH = h => { const m = Math.round(h * 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`; };
 
 function dayHtml(d, idx, list) {
   const dt = new Date(d.date + "T12:00:00");
   const pts = dayPoints(d, idx, list);
   const r = pts.length > 1 ? routes[routeKey(pts)] : null;
   const st = routeStatus[d.id];
+  const open = allExpanded || expandedDays.has(d.id) || editingDay === d.id;
   let drive = "";
-  if (st === "busy") drive = `<span class="busy">Route wird berechnet …</span>`;
-  else if (st === "offline" && !r) drive = `<span class="busy">Offline – die Route wird berechnet, sobald wieder Internet da ist</span>` +
-    (d.km ? `<span>Plan: ca. ${num(d.km)} km</span>` : "");
-  else if (r && r.km < 0.1 && !r.ferryKm) drive = `<span class="live">Ruhetag</span><span>kein Fahrtag</span>`;
-  else if (r) {
+  if (r && r.km >= 0.1) {
     const total = r.h + r.ferryH;
     drive = `<span class="live" title="Live berechnet über OpenStreetMap-Daten">live</span><span>${num(r.km)} km</span>` +
       `<span class="${total > LONG_DAY ? "long" : ""}">${fmtH(r.h)} Fahrt${total > LONG_DAY ? " – langer Tag" : ""}</span>` +
       (r.ferryH ? `<span class="ferry">+ ca. ${fmtH(r.ferryH)} Fähre</span>` : "");
-  } else {
-    drive = (st === "err" ? `<span class="err">Routing fehlgeschlagen – Planwerte:</span>` : "") +
-      (d.km ? `<span>ca. ${num(d.km)} km</span>` : "") + (d.hours ? `<span>${fmtH(d.hours)}</span>` : "");
-  }
+  } else if (!r && d.km) drive = `<span>Planwert: ca. ${num(d.km)} km</span>` + (d.hours ? `<span>${fmtH(d.hours)}</span>` : "");
   const fl = r?.ferries;
   if (fl?.length) drive += `<span class="ferry" title="${esc(fl.map(f => `${f.name} (ca. ${f.min} min)`).join(" · "))}">⛴ ${fl.length} ${fl.length === 1 ? "Fähre" : "Fähren"}: ${esc(fl.map(f => f.name).join(", "))}</span>`;
-  else if (!fl && d.ferries) drive += `<span class="ferry">${d.ferries} ${d.ferries === 1 ? "Fähre" : "Fähren"}</span>`;
-  let h = `<li class="day${d.id === selDay ? " sel" : ""}" data-day="${esc(d.id)}" tabindex="0">
+  let h = `<li class="day${d.id === selDay ? " sel" : ""}${open ? " open" : ""}" data-day="${esc(d.id)}" tabindex="0" aria-expanded="${open}">
     <span class="d"><span class="grip" title="Ziehen zum Verschieben" aria-hidden="true">⠿</span><b>${fmtDate(d.date)}</b><small>${isNaN(dt) ? "" : DAY_NAMES[dt.getDay()] + " · "}Tag ${dayNo(d.date)}</small></span>
-    <span class="body"><span class="t">${esc(d.title || "Ohne Titel")}</span>
+    <span class="body">
+      <span class="head"><span class="t">${esc(d.title || "Ohne Titel")}</span><span class="chev" aria-hidden="true">${open ? "▴" : "▾"}</span></span>
+      <span class="sum">${daySummary(d, r, st)}</span>
+      <span class="movebtns"><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:-1" aria-label="Tag nach oben"${idx === 0 ? " disabled" : ""}>↑</button><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:1" aria-label="Tag nach unten"${idx === list.length - 1 ? " disabled" : ""}>↓</button></span>`;
+  if (open) h += `
+      <span class="details">
       ${d.sub ? `<span class="s">${esc(d.sub)}</span>` : ""}
-      <span class="drive">${drive}</span>
+      ${drive ? `<span class="drive">${drive}</span>` : ""}
       ${typeof ferryHtml === "function" ? ferryHtml(d, r) : ""}
       ${d.night ? `<span class="night">${esc(d.night)}</span>` : ""}
       ${typeof dayExtrasHtml === "function" ? dayExtrasHtml(d, r) : ""}
       ${d.todo ? `<span class="todo">${esc(d.todo).replace(/\n/g, "<br>")}</span>` : ""}
       ${d.warn ? `<span class="w">${esc(d.warn)}</span>` : ""}
       ${editingDay !== d.id ? `<span class="acts">
+        <button type="button" class="btn ghost mini onlynarrow" data-showday="${esc(d.id)}">🗺 Auf der Karte</button>
         ${pts.length > 1 ? `<a class="btn go mini" href="${esc(mapsUrl(pts))}" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>` : ""}
         ${hasPos(d) && !/zu hause/i.test(d.night || "") ? `<a class="btn ghost mini" href="https://park4night.com/de/search?lat=${d.lat}&lng=${d.lon}&z=12" target="_blank" rel="noopener noreferrer" title="Stellplätze rund um ${esc(d.night)} bei park4night ansehen">park4night ↗</a>` : ""}
         <button type="button" class="btn ghost mini" data-edit="${esc(d.id)}">Bearbeiten</button>
-        <span class="movebtns"><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:-1" aria-label="Tag nach oben"${idx === 0 ? " disabled" : ""}>↑</button><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:1" aria-label="Tag nach unten"${idx === list.length - 1 ? " disabled" : ""}>↓</button></span>
         <button type="button" class="btn ghost mini" data-extend="${esc(d.id)}" title="Eine weitere Nacht am selben Ort – alle folgenden Tage rücken einen Tag nach hinten">+ Nacht</button>
         ${st === "err" ? `<button type="button" class="btn ghost mini" data-retry="${esc(d.id)}">Route neu versuchen</button>` : ""}
       </span>` : ""}
-    </span>`;
+      </span>`;
+  h += `</span>`;
   if (editingDay === d.id) h += editForm(d);
   return h + "</li>";
+}
+// Zwischenziele als Liste: Name (mit Suche), Aufenthalt, „ab hier Fähre“, sortieren, löschen
+function viaRow(v = {}) {
+  const has = typeof v.lat === "number";
+  return `<div class="viarow" data-lat="${has ? v.lat : ""}" data-lon="${has ? v.lon : ""}" data-orig="${esc(v.name || "")}">
+    <span class="vmain"><input type="text" class="vname" maxlength="60" value="${esc(v.name || "")}" placeholder="Ort, z. B. Egersund" aria-label="Name des Zwischenziels">
+      <button type="button" class="btn ghost mini" data-vsearch title="Ort suchen">Suchen</button></span>
+    <span class="vopts">
+      <label class="vstay">Aufenthalt <input type="number" class="vstayin" min="0" max="1440" step="5" value="${v.stay || ""}" placeholder="0" aria-label="Aufenthalt in Minuten"> min</label>
+      <label class="vferry"><input type="checkbox" class="vferryin"${v.ferry ? " checked" : ""}> ab hier Fähre</label>
+      <span class="vbtns"><button type="button" class="btn ghost mini" data-vup aria-label="nach oben">↑</button><button type="button" class="btn ghost mini" data-vdown aria-label="nach unten">↓</button><button type="button" class="btn danger mini" data-vdel aria-label="Zwischenziel löschen">✕</button></span>
+    </span>
+    <span class="vpos hint">${has ? `${v.lat}, ${v.lon}` : "wird beim Speichern gesucht"}</span>
+  </div>`;
 }
 function editForm(d) {
   return `<form class="edit" data-save="${esc(d.id)}" autocomplete="off">
@@ -425,7 +484,9 @@ function editForm(d) {
       <button class="btn ghost mini" type="button" data-find>Ort suchen</button>
     </div>
     <label class="lbl">Koordinaten <span class="hint">z. B. aus Google Maps kopiert: 62.47, 6.19</span><input type="text" name="coords" value="${hasPos(d) ? esc(d.lat + ", " + d.lon) : ""}"></label>
-    <label class="lbl">Zwischenziele <span class="hint">eins pro Zeile. Nur ein Name genügt, z. B. „Egersund“ – die Koordinaten werden gesucht. „(Fähre)“ am Zeilenende = ab hier geht es per Schiff zum nächsten Punkt.</span><textarea name="via" rows="3">${esc(viaText(d.via))}</textarea></label>
+    <div class="lbl">Zwischenziele &amp; Stopps <span class="hint">in Fahrtreihenfolge. Nur ein Name genügt – der Ort wird gesucht. „ab hier Fähre“ = von diesem Punkt zum nächsten per Schiff.</span></div>
+    <div class="vialist">${(d.via || []).map(viaRow).join("")}</div>
+    <button type="button" class="btn ghost mini vadd" data-vadd>+ Zwischenziel</button>
     <label class="lbl">Vorhaben &amp; Notizen<textarea name="todo" maxlength="600">${esc(d.todo)}</textarea></label>
     <label class="lbl">Achtung-Hinweis<input type="text" name="warn" maxlength="140" value="${esc(d.warn)}" placeholder="leer lassen, wenn alles passt"></label>
     <p class="formerr" data-err></p>
@@ -506,16 +567,16 @@ function parseCoords(s) {
   const lat = +m[1].replace(",", "."), lon = +m[2].replace(",", ".");
   return Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon } : null;
 }
-async function parseVia(text) {
+async function readVias(f) {
   const out = [];
-  for (let line of String(text).split("\n").map(s => s.trim()).filter(Boolean)) {
-    const ferry = /\(f[äa]hre\)\s*$/i.test(line);
-    line = line.replace(/\(f[äa]hre\)\s*$/i, "").trim();
-    const ix = line.indexOf(":");
-    const name = (ix >= 0 ? line.slice(0, ix) : line).trim();
-    let pos = ix >= 0 ? parseCoords(line.slice(ix + 1)) : null;
-    if (!pos) { const g = await geocode(name); pos = { lat: g.lat, lon: g.lon }; }
-    out.push({ name, ...pos, ...(ferry ? { ferry: true } : {}) });
+  for (const row of f.querySelectorAll(".viarow")) {
+    const name = row.querySelector(".vname").value.trim(); if (!name) continue;
+    let lat = parseFloat(row.dataset.lat), lon = parseFloat(row.dataset.lon);
+    if (!isFinite(lat) || !isFinite(lon)) { const g = await geocode(name); lat = g.lat; lon = g.lon; }
+    const v = { name, lat, lon };
+    const stay = parseInt(row.querySelector(".vstayin").value, 10); if (stay > 0) v.stay = Math.min(1440, stay);
+    if (row.querySelector(".vferryin").checked) v.ferry = true;
+    out.push(v);
   }
   if (out.length > 20) throw new Error("Höchstens 20 Zwischenziele.");
   return out;
@@ -542,8 +603,33 @@ $("#days").addEventListener("click", async e => {
     catch (x) { err.textContent = x.message; }
     btn.disabled = false; return;
   }
-  if (t.closest("button, input, textarea, a, form, label")) return;
-  const li = t.closest("[data-day]"); if (li) selectDay(li.dataset.day);
+  const vrow = t.closest(".viarow");
+  if (t.closest("[data-vadd]")) { const list = t.closest("form").querySelector(".vialist"); list.insertAdjacentHTML("beforeend", viaRow()); list.lastElementChild.querySelector(".vname").focus(); return; }
+  if (vrow && t.closest("[data-vdel]")) { vrow.remove(); return; }
+  if (vrow && t.closest("[data-vup]")) { vrow.previousElementSibling?.before(vrow); return; }
+  if (vrow && t.closest("[data-vdown]")) { vrow.nextElementSibling?.after(vrow); return; }
+  if (vrow && t.closest("[data-vsearch]")) {
+    const btn = t.closest("[data-vsearch]"), pos = vrow.querySelector(".vpos"), name = vrow.querySelector(".vname").value.trim();
+    if (!name) return;
+    btn.disabled = true; pos.textContent = "suche …";
+    try { const g = await geocode(name); vrow.dataset.lat = g.lat; vrow.dataset.lon = g.lon; vrow.dataset.orig = name; pos.textContent = `${g.lat}, ${g.lon}`; }
+    catch (x) { pos.textContent = x.message; }
+    btn.disabled = false; return;
+  }
+  if (t.closest("[data-showday]")) { const id = t.closest("[data-showday]").dataset.showday; if (typeof setMapList === "function") setMapList("map"); selectDay(id); return; }
+  if (t.closest("button, input, textarea, a, form, label, select")) return;
+  const li = t.closest("[data-day]"); if (!li) return;
+  // Antippen: Tag auswählen und Details auf- bzw. zuklappen
+  const id = li.dataset.day;
+  if (expandedDays.has(id) || allExpanded) { expandedDays.delete(id); if (allExpanded) { allExpanded = false; sortedDays().forEach(x => x.id !== id && expandedDays.add(x.id)); } }
+  else expandedDays.add(id);
+  selDay = id; renderDay(id);
+  selectDay(id, !document.querySelector(".route.ml-list"));
+});
+// Name eines Zwischenziels geändert → beim Speichern neu suchen
+$("#days").addEventListener("input", e => {
+  const row = e.target.closest(".viarow"); if (!row || !e.target.matches(".vname")) return;
+  if (e.target.value.trim() !== row.dataset.orig) { row.dataset.lat = row.dataset.lon = ""; row.querySelector(".vpos").textContent = "wird beim Speichern gesucht"; }
 });
 $("#days").addEventListener("keydown", e => {
   if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-day]")) { e.preventDefault(); selectDay(e.target.dataset.day); }
@@ -556,9 +642,7 @@ $("#days").addEventListener("submit", async e => {
     let pos = f.coords.value.trim() ? parseCoords(f.coords.value) : null;
     if (f.coords.value.trim() && !pos) throw new Error("Koordinaten nicht lesbar – Format: 62.47, 6.19");
     if (!pos && f.night.value.trim()) { const g = await geocode(f.night.value.replace(/\s*\(.*\)\s*$/, "")); pos = { lat: g.lat, lon: g.lon }; }
-    const via = await parseVia(f.via.value);
-    // Aufenthaltsdauer der Stopps übernehmen (steht nicht im Textfeld)
-    for (const v of via) { const o = (d.via || []).find(x => x.name === v.name || hav(x, v) < 0.5); if (o?.stay) v.stay = o.stay; }
+    const via = await readVias(f);
     undoSnap = JSON.stringify(state.days);
     const oldNight = d.night, newNight = f.night.value.trim();
     Object.assign(d, {

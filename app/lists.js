@@ -73,14 +73,26 @@ function commit() { save(); renderLists(); }
 
 /* ================= Reiter ================= */
 const VIEWS = ["route", "panorama", "erleben", "himmel", "tagebuch", "kosten", "todos", "packen", "kaufen"];
+// Gruppen: Planen / Unterwegs / Organisieren. Pro Gruppe wird der zuletzt benutzte Reiter gemerkt.
+const lastInGroup = (() => { try { return JSON.parse(localStorage.getItem("nordtour.tabs")) || {}; } catch { return {}; } })();
 function showView() {
   const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "route";
   for (const x of VIEWS) $("#v-" + x).hidden = x !== v;
   document.querySelectorAll("nav.tabs a").forEach(a => a.setAttribute("aria-current", a.dataset.view === v ? "page" : "false"));
+  const grp = document.querySelector(`nav.tabs a[data-view="${v}"]`)?.closest(".tgroup")?.dataset.group;
+  document.querySelectorAll(".tgroup").forEach(g => g.classList.toggle("cur", g.dataset.group === grp));
+  document.querySelectorAll("[data-gbar]").forEach(b => b.setAttribute("aria-current", b.dataset.gbar === grp ? "page" : "false"));
+  if (grp) { lastInGroup[grp] = v; try { localStorage.setItem("nordtour.tabs", JSON.stringify(lastInGroup)); } catch { /* egal */ } }
   document.querySelector(`nav.tabs a[data-view="${v}"]`)?.scrollIntoView({ inline: "center", block: "nearest" });   // aktiven Reiter sichtbar machen
   if (v === "route") setTimeout(() => map.invalidateSize(), 0);
 }
 window.addEventListener("hashchange", showView);
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-gbar]"); if (!b) return;
+  const g = b.dataset.gbar, first = document.querySelector(`.tgroup[data-group="${g}"] a`)?.dataset.view;
+  location.hash = "#" + (lastInGroup[g] || first);
+  window.scrollTo({ top: 0 });
+});
 
 /* ================= Kosten ================= */
 // Leere Übernachtungs-Platzhalter aus der alten Planung (Unterkunft ohne Betrag, Notiz, Häkchen):
