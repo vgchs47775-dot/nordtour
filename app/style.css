@@ -263,5 +263,28 @@ input[type=url] { width: 100%; border: 1px solid var(--line); border-radius: 8px
 .map-layers button[data-maplayer="pano"][aria-pressed="true"] { background: #3d7a3a; color: #fff; }
 .map-layers button[data-maplayer="sights"][aria-pressed="true"] { background: #7d4fb0; color: #fff; }
 
+/* Nachthimmel */
+:root { --aurora: #1f9e74; --aurora-soft: #d6f1e6; --aurora-ink: #15715a; }
+@media (prefers-color-scheme: dark) { :root { --aurora: #2fbf8f; --aurora-soft: #173a2f; --aurora-ink: #7fe0bf; } }
+.tablewrap { padding: 0; overflow-x: auto; }
+table.sky { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+table.sky th, table.sky td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.sky th { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 600; background: var(--bg); }
+table.sky tr:last-child td { border-bottom: 0; }
+.chance { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 10px; padding: 2px 9px; }
+.chance.good { background: var(--aurora); color: #fff; }
+.chance.mid { background: var(--aurora-soft); color: var(--aurora-ink); }
+.chance.low { background: var(--line); color: var(--ink); }
+.chance.none { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.darkbar { position: relative; width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--sun-soft), var(--line)); overflow: hidden; display: inline-block; vertical-align: middle; }
+.darkbar i { position: absolute; top: 0; bottom: 0; background: var(--night); border-radius: 4px; }
+.sky-best { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-bottom: 14px; }
+.sky-best:empty { display: none; }
+.sky-best .panel { display: grid; gap: 4px; align-content: start; }
+.sky-best b { font-family: var(--font-display); font-size: 20px; }
+.sky-best span:not(.hint) { font-size: 13px; color: var(--muted); }
+.day .sky1 { font-size: 12.5px; color: var(--muted); }
+.day .sky1 .chance { font-size: 11px; padding: 1px 7px; }
+
 .foot { margin-top: 28px; font-size: 12px; color: var(--muted); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }

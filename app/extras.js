@@ -90,7 +90,8 @@ function dayProgram(d) {
   return { list, visit: list.reduce((a, x) => a + x.visit, 0), detour: list.reduce((a, x) => a + x.detour, 0) };
 }
 function dayExtrasHtml(d, r) {
-  if (!EXTRAS) return "";
+  const sky = typeof skyLine === "function" ? skyLine(d) : "";
+  if (!EXTRAS) return sky;
   let h = "";
   for (const p of PANO().filter(p => isPlanned("pano", p.id) && p.days.includes(d.id))) {
     const part = p.days.length > 1 ? ` (Teil ${p.days.indexOf(d.id) + 1} von ${p.days.length})` : "";
@@ -106,7 +107,7 @@ function dayExtrasHtml(d, r) {
     h += `<span class="prog">Programm: ${pr.list.map(x => esc(x.name)).join(", ")} · ${fmtShort(pr.visit)}${pr.detour ? ` + ${fmtShort(pr.detour)} Umweg` : ""}</span>` +
       `<span class="total${tot > 10 ? " long" : ""}">Tag gesamt ca. ${fmtH(tot)}${tot > 10 ? " – sehr voll" : ""}</span>`;
   }
-  return h;
+  return h + sky;
 }
 
 /* ================= Fotos ================= */
