@@ -246,6 +246,12 @@
   </div>
 </dialog>
 
+<dialog id="backupDlg" class="backupdlg" aria-labelledby="backupTitle">
+  <div class="toolbar"><h2 id="backupTitle">Sicherungen</h2><div class="acts"><button class="btn mini" type="button" id="backupNow">Jetzt sichern</button><button class="btn ghost mini" type="button" id="backupClose">Schließen</button></div></div>
+  <p class="hint" id="backupMsg"></p>
+  <ol class="blist" id="backupList"></ol>
+</dialog>
+
 <dialog id="loginDlg" aria-labelledby="loginTitle">
   <form id="loginForm" autocomplete="on">
     <h2 id="loginTitle">Anmelden</h2>
@@ -268,6 +274,7 @@
 <script src="sky.js"></script>
 <script src="journal.js"></script>
 <script src="sync.js"></script>
+<script src="backup.js"></script>
 <script src="pwa.js"></script>
 </body>
 </html>

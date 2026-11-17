@@ -33,7 +33,7 @@ function renderSync() {
     offline: syncInfo.dirty ? "Offline – wird später hochgeladen" : "Offline" }[syncStatus] || "";
   el.innerHTML = `<span class="chip ${syncStatus}"${syncMsg ? ` title="${esc(syncMsg)}"` : ""}>${label}</span>` +
     (syncStatus === "err" ? `<button class="btn ghost mini" type="button" id="btnRetry">Erneut versuchen</button>` : "") +
-    `<span class="who">${esc(syncUser.email || "")}</span><button class="btn ghost mini" type="button" id="btnLogout">Abmelden</button>`;
+    `<span class="who">${esc(syncUser.email || "")}</span><button class="btn ghost mini" type="button" id="btnBackups">Sicherungen</button><button class="btn ghost mini" type="button" id="btnLogout">Abmelden</button>`;
 }
 
 /* ---------- Laden aus der Cloud ---------- */

@@ -12,7 +12,7 @@ const APP = "nordtour-app-" + VERSION, TILES = "nordtour-tiles", PHOTOS = "nordt
 const MAX_TILES = 3000, MAX_PHOTOS = 800;
 
 const CORE = ["./", "index.html", "style.css", "config.js", "extras.js", "app.js", "stops.js", "lists.js", "sky.js",
-  "journal.js", "sync.js", "pwa.js", "extras.json", "manifest.webmanifest",
+  "journal.js", "sync.js", "backup.js", "pwa.js", "extras.json", "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png", "icons/apple-touch-icon.png", "icons/favicon-32.png"];
 const CDN = [
   "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
