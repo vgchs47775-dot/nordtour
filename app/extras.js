@@ -91,7 +91,8 @@ function dayProgram(d) {
   return { list, visit: list.reduce((a, x) => a + x.visit, 0), detour: list.reduce((a, x) => a + x.detour, 0) };
 }
 function dayExtrasHtml(d, r) {
-  const sky = (typeof osmDayHtml === "function" ? osmDayHtml(d, r) : "") + (typeof skyLine === "function" ? skyLine(d) : "");
+  const sky = (typeof osmDayHtml === "function" ? osmDayHtml(d, r) : "") + (typeof tollDayHtml === "function" ? tollDayHtml(d, r) : "") +
+    (typeof skyLine === "function" ? skyLine(d) : "");
   if (!EXTRAS) return sky;
   let h = "";
   for (const p of PANO().filter(p => isPlanned("pano", p.id) && p.days.includes(d.id))) {

@@ -205,6 +205,7 @@ async function ensureRoutes() {
   if (typeof renderCostTop === "function" && state.costs) renderCostTop();   // Spritkosten hängen an den km
   if (ferryNews.length) { notice("⛴ " + ferryNews.join(" · ")); ferryNews = []; }
   if (typeof ensureOsm === "function") ensureOsm();                          // Tankstellen & Trinkwasser
+  if (typeof ensureTolls === "function") ensureTolls();                      // Maut Norwegen (toll.js)
 }
 function applyRoute(d, r) {
   d.km = Math.round(r.km);

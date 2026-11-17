@@ -134,7 +134,7 @@
         <p class="hint" id="cMissing"></p>
       </div>
       <form class="panel fuel" id="fuelForm" autocomplete="off">
-        <h3>Sprit &amp; Mitreisende</h3>
+        <h3>Sprit, Maut &amp; Mitreisende</h3>
         <div class="three">
           <label class="lbl" for="sPersons">Personen<input type="number" id="sPersons" min="1" max="9" step="1"></label>
           <label class="lbl" for="sCons">Verbrauch l/100 km<input type="number" id="sCons" min="1" max="30" step="0.1"></label>
@@ -142,6 +142,10 @@
         </div>
         <div class="res" id="fuelRes">–</div>
         <label class="toggle" for="sAuto"><input type="checkbox" id="sAuto"> Spritkosten automatisch aus den live berechneten Kilometern</label>
+        <div class="tollrow">
+          <label class="lbl" for="sToll">Maut je Station (NOK)<input type="number" id="sToll" min="0" max="300" step="1"></label>
+          <label class="toggle" for="sAutoToll"><input type="checkbox" id="sAutoToll"> Maut Norwegen grob schätzen (Mautstellen an der Strecke × Preis)</label>
+        </div>
         <div class="acts"><button class="btn mini" type="submit">Übernehmen</button><span class="formerr" id="fErr"></span></div>
       </form>
     </div>
@@ -270,6 +274,7 @@
 <script src="app.js"></script>
 <script src="stops.js"></script>
 <script src="osm.js"></script>
+<script src="toll.js"></script>
 <script src="ferries.js"></script>
 <script src="lists.js"></script>
 <script src="sky.js"></script>

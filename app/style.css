@@ -371,3 +371,5 @@ table.sky tr:last-child td { border-bottom: 0; }
 .deps .muted, .deps.muted { color: var(--muted); font-weight: 400; }
 .deps .times { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
 .deps .times span { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px; font-variant-numeric: tabular-nums; }
+.tollrow { display: grid; grid-template-columns: 150px 1fr; gap: 8px 12px; align-items: end; }
+@media (max-width: 520px) { .tollrow { grid-template-columns: 1fr; } }

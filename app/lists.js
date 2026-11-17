@@ -15,7 +15,7 @@ const COST_CATS = [
 const COST_COLOR = Object.fromEntries(COST_CATS);
 const PRIOS = ["Muss", "Sollte", "Nice-to-have"];
 const PRIO_RANK = { "Muss": 0, "Sollte": 1, "Nice-to-have": 2 };
-const DEFAULT_MAIN = { persons: 2, consumption: 8, fuelPrice: 2.4, autoFuel: true };
+const DEFAULT_MAIN = { persons: 2, consumption: 8, fuelPrice: 2.4, autoFuel: true, autoToll: true, tollNok: 30 };
 
 const openGroups = new Set(CATS.map(c => c[0]));
 const openCostGroups = new Set(COST_CATS.map(c => c[0]));
@@ -94,6 +94,7 @@ function costSummary() {
     if (c.amount == null) missing++;
   }
   if (m.autoFuel) { const f = fuelCost(); byCat.Sprit += f; total += f; open += f; }
+  if (m.autoToll && typeof tollTotals === "function") { const t = tollTotals().eur; byCat.Maut += t; total += t; open += t; }
   return { total, open, byCat, persons, missing };
 }
 function renderCostTop() {
@@ -109,6 +110,7 @@ function renderCostTop() {
   $("#fuelRes").textContent = t.km ? `${num(t.km)} km × ${String(m.consumption).replace(".", ",")} l/100 km = ${num(liters)} l ≈ ${euro(fuelCost())}` : "Noch keine Strecke berechnet.";
   if (!document.activeElement?.closest("#fuelForm")) {
     $("#sPersons").value = m.persons; $("#sCons").value = m.consumption; $("#sPrice").value = m.fuelPrice; $("#sAuto").checked = !!m.autoFuel;
+    $("#sToll").value = m.tollNok; $("#sAutoToll").checked = !!m.autoToll;
   }
   document.querySelectorAll("[data-ccat]").forEach(g => { const c = g.querySelector(".cnt"); if (c) c.textContent = euro(s.byCat[g.dataset.ccat]); });
 }
@@ -121,11 +123,16 @@ function renderCosts() {
   for (const [cat, col] of COST_CATS) {
     const rows = state.costs.filter(c => (COST_COLOR[c.cat] ? c.cat : "Sonstiges") === cat)
       .sort((a, b) => String(dayById[a.dayId]?.date || "9").localeCompare(String(dayById[b.dayId]?.date || "9")));
-    const auto = cat === "Sprit" && m.autoFuel;
+    const autoToll = cat === "Maut" && m.autoToll && typeof tollTotals === "function";
+    const auto = (cat === "Sprit" && m.autoFuel) || autoToll;
     if (!rows.length && !auto) continue;
     html += `<details class="group" data-ccat="${esc(cat)}"${openCostGroups.has(cat) ? " open" : ""}>
       <summary><span class="dot" style="background:${col}"></span>${esc(cat)}<span class="cnt">${euro(s.byCat[cat])}</span></summary><div class="rows">`;
-    if (auto) html += `<div class="crow auto"><span></span><span class="nm">Sprit für die ganze Strecke<span class="nt">automatisch aus ${num(routeTotals().km)} km berechnet</span></span><span class="amtv">${euro(fuelCost())}</span><span></span></div>`;
+    if (autoToll) {
+      const t = tollTotals();
+      html += `<div class="crow auto"><span></span><span class="nm">Maut Norwegen (grobe Schätzung)<span class="nt">${t.n} Mautstellen an der Strecke × ${num(m.tollNok)} NOK${t.open ? ` · ${t.open} Etappen noch nicht ausgewertet` : ""} · ersetzt den Posten „Maut Norwegen“, solange dort kein Betrag steht · <a href="https://www.autopass.no/" target="_blank" rel="noopener">AutoPASS</a></span></span><span class="amtv">${euro(t.eur)}</span><span></span></div>`;
+    }
+    if (auto && cat === "Sprit") html += `<div class="crow auto"><span></span><span class="nm">Sprit für die ganze Strecke<span class="nt">automatisch aus ${num(routeTotals().km)} km berechnet</span></span><span class="amtv">${euro(fuelCost())}</span><span></span></div>`;
     html += rows.map(c => {
       const d = dayById[c.dayId];
       const sub = [d ? `${fmtDate(d.date)} · ${d.title || ""}` : "", c.note || ""].filter(Boolean).join(" – ");
@@ -155,12 +162,14 @@ document.addEventListener("change", e => {
 $("#fuelForm").addEventListener("submit", e => {
   e.preventDefault();
   const persons = parseInt($("#sPersons").value, 10), consumption = parseFloat($("#sCons").value), fuelPrice = parseFloat($("#sPrice").value);
-  if (!(persons >= 1) || !(consumption > 0) || !(fuelPrice > 0)) { $("#fErr").textContent = "Bitte alle drei Werte ausfüllen."; return; }
+  const tollNok = parseFloat($("#sToll").value);
+  if (!(persons >= 1) || !(consumption > 0) || !(fuelPrice > 0) || !(tollNok >= 0)) { $("#fErr").textContent = "Bitte alle Werte ausfüllen."; return; }
   $("#fErr").textContent = "";
-  state.settings.main = { persons, consumption, fuelPrice, autoFuel: $("#sAuto").checked };
+  state.settings.main = { ...main(), persons, consumption, fuelPrice, autoFuel: $("#sAuto").checked, tollNok, autoToll: $("#sAutoToll").checked };
   document.activeElement?.blur(); commit(); updateStats();
 });
 $("#sAuto").addEventListener("change", () => $("#fuelForm").requestSubmit());
+$("#sAutoToll").addEventListener("change", () => $("#fuelForm").requestSubmit());
 
 /* ================= To-dos ================= */
 function renderTodos() {
