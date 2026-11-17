@@ -25,13 +25,15 @@ const CDN = [
 self.addEventListener("install", e => {
   e.waitUntil((async () => {
     const c = await caches.open(APP);
-    await c.addAll(CORE);
+    // cache: "reload" = am Browser-Zwischenspeicher vorbei direkt vom Server holen. Sonst können
+    // (GitHub Pages: bis 10 Minuten) alte Dateien unter der neuen Versionsnummer landen.
+    await c.addAll(CORE.map(u => new Request(u, { cache: "reload" })));
     for (const u of CDN) { try { const r = await fetch(u, { mode: "cors" }); if (r.ok) await c.put(u, r); } catch { /* später */ } }
     // Fotos der Panoramastraßen und Sehenswürdigkeiten
     try {
       const x = await (await c.match("extras.json")).json();
       const imgs = [...x.pano, ...x.sights].flatMap(p => (p.imgs || []).map(i => i.src));
-      await Promise.allSettled(imgs.map(src => c.add(src)));
+      await Promise.allSettled(imgs.map(src => c.add(new Request(src, { cache: "reload" }))));
     } catch { /* egal */ }
   })());
 });
