@@ -72,7 +72,7 @@ function drawStops() {
   const d = state?.days.find(x => x.id === selDay); if (!d) return;
   (d.via || []).forEach((v, i) => {
     if (!hasPos(v)) return;
-    const m = L.marker([v.lat, v.lon], { icon: stopIcon(i + 1, v.stay), draggable: true, riseOnHover: true, zIndexOffset: 500 });
+    const m = L.marker([v.lat, v.lon], { icon: stopIcon(i + 1, v.stay), draggable: !!window.mapEdit, riseOnHover: true, zIndexOffset: 500 });
     m.bindTooltip(`${esc(v.name)}${v.stay ? ` · ${v.stay} min` : ""}`, { direction: "top", offset: [0, -10] });
     m.bindPopup(() => stopPopup(d, i), { minWidth: 220 });
     m.on("dragend", e => moveStop(d.id, i, e.target.getLatLng()));
@@ -81,6 +81,9 @@ function drawStops() {
 }
 function stopPopup(d, i) {
   const v = d.via[i];
+  if (!window.mapEdit) return `<div class="pop"><b>Stopp ${i + 1}: ${esc(v.name)}</b>
+    <span>${v.stay ? `Aufenthalt ${v.stay} min` : "ohne Aufenthalt"}${v.ferry ? " · ab hier Fähre" : ""}</span>
+    <span class="hint">Zum Ändern oben links auf der Karte „✎ Karte bearbeiten“ antippen.</span></div>`;
   return `<form class="pop stopform" data-stop="${esc(d.id)}:${i}">
     <b>Stopp ${i + 1}${v.ferry ? " · ab hier Fähre" : ""}</b>
     <label class="lbl">Name<input type="text" name="name" maxlength="60" value="${esc(v.name)}"></label>
@@ -98,8 +101,9 @@ async function moveStop(dayId, i, ll) {
 // Klick (oder Tippen) auf die Karte: Stopp für den gewählten Tag anbieten
 const addPopup = L.popup({ minWidth: 200 });
 map.on("click", e => {
+  if (!window.mapEdit) return;                       // nur im Bearbeiten-Modus
   const d = state?.days.find(x => x.id === selDay);
-  if (!d) return;
+  if (!d) { addPopup.setLatLng(e.latlng).setContent(`<div class="pop"><span>Wähle zuerst in der Liste oder auf der Karte einen Tag aus, dann kannst du hier einen Stopp einlegen.</span></div>`).openOn(map); return; }
   addPopup.setLatLng(e.latlng).setContent(`<div class="pop"><b>${esc(fmtDate(d.date))}: ${esc(d.title)}</b>
     <span>Hier einen Stopp einlegen? Er wird an der Stelle der Route eingefügt, an der er den kleinsten Umweg macht.</span>
     <div class="acts"><button class="btn mini" type="button" data-addstop="${esc(d.id)}" data-ll="${e.latlng.lat},${e.latlng.lng}">Stopp hinzufügen</button></div></div>`).openOn(map);
@@ -149,3 +153,26 @@ window.addEventListener("online", () => {
 });
 window.addEventListener("offline", () => renderDays());
 window.addEventListener("DOMContentLoaded", initSortable);
+
+/* ---------- Karte bearbeiten: nur dann lassen sich Punkte ziehen und Stopps anlegen ---------- */
+window.mapEdit = false;
+const EditCtl = L.Control.extend({
+  onAdd() {
+    const b = L.DomUtil.create("button", "map-edit");
+    b.type = "button"; b.id = "btnMapEdit"; b.setAttribute("aria-pressed", "false");
+    b.textContent = "✎ Karte bearbeiten";
+    L.DomEvent.disableClickPropagation(b);
+    b.addEventListener("click", () => setMapEdit(!window.mapEdit));
+    return b;
+  }
+});
+new EditCtl({ position: "topleft" }).addTo(map);
+function setMapEdit(on) {
+  window.mapEdit = on;
+  const b = document.getElementById("btnMapEdit");
+  b.textContent = on ? "✓ Fertig" : "✎ Karte bearbeiten";
+  b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+  map.closePopup(); drawMarkers();
+  if (on) notice("Karte bearbeiten: Übernachtungen und Stopps lassen sich jetzt ziehen. Tag wählen und auf die Karte tippen = Stopp einlegen. Danach „✓ Fertig“ antippen.");
+  else if (!$("#notice").hidden && /^Karte bearbeiten/.test($("#notice").textContent)) $("#notice").hidden = true;
+}

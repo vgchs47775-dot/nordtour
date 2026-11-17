@@ -253,7 +253,7 @@ function drawMarkers() {
     .bindTooltip(`${esc(h.name)} – Start`, { className: "mtip" }).addTo(markerLayer);
   sortedDays().forEach((d, i) => {
     if (!hasPos(d) || d.night === "zu Hause") return;
-    const m = L.marker([d.lat, d.lon], { icon: icon(i + 1, d.id === selDay ? "sel" : ""), draggable: true, title: d.night, riseOnHover: true });
+    const m = L.marker([d.lat, d.lon], { icon: icon(i + 1, d.id === selDay ? "sel" : ""), draggable: !!window.mapEdit, title: d.night, riseOnHover: true });
     m.bindTooltip(`${i + 1}. ${esc(d.night)}`, { className: "mtip", direction: "top", offset: [0, -12] });
     m.on("click", () => selectDay(d.id, false));
     m.on("dragend", e => moveNight(d.id, e.target.getLatLng()));
