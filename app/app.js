@@ -78,22 +78,32 @@ function dayPoints(d, idx, list, viaOverride) {
 }
 // Fügt Punkte dort in eine Wegpunktliste ein, wo sie den kleinsten Umweg machen
 // (nicht in Fährabschnitte). Punkte, die schon (fast) enthalten sind (< 2 km), werden übersprungen.
-function cheapestIndex(start, list, p, end) {
+// lo/hi: erlaubter Bereich der Einfügeposition (z. B. „vor Ålesund“)
+function cheapestIndex(start, list, p, end, lo = 0, hi = list.length) {
   const all = [start, ...list, ...(end ? [end] : [])];
-  let best = list.length, bestCost = Infinity;
-  for (let i = 0; i < all.length - 1; i++) {
+  let best = hi, bestCost = Infinity;
+  for (let i = lo; i <= Math.min(hi, all.length - 2); i++) {
     if (all[i].ferry) continue;
     const c = hav(all[i], p) + hav(p, all[i + 1]) - hav(all[i], all[i + 1]);
     if (c < bestCost) { bestCost = c; best = i; }
   }
   return best;            // Einfügeposition innerhalb von list
 }
+// Eigene Stopps in die Wegpunkte einer Panoramastraße einfügen. Die Reihenfolge der eigenen
+// Stopps untereinander bleibt erhalten: Steht z. B. „Eidsdal“ vor „Ålesund“, kommt Eidsdal
+// auch in der Route vor Ålesund – innerhalb dieser Grenzen dort, wo der Umweg am kleinsten ist.
 function mergeStops(start, base, stops, end) {
-  const out = [...base];
-  for (const s of stops.filter(hasPos)) {
-    if (out.some(w => hav(w, s) < 2)) continue;
-    out.splice(cheapestIndex(start, out, s, end), 0, s);
-  }
+  const out = [...base], st = stops.filter(hasPos);
+  const at = s => out.findIndex(w => hav(w, s) < 2);
+  let cursor = 0;
+  st.forEach((s, i) => {
+    const k = at(s);
+    if (k >= 0) { cursor = k + 1; return; }
+    let hi = out.length;
+    for (const n of st.slice(i + 1)) { const kn = at(n); if (kn >= 0) { hi = kn; break; } }
+    const pos = cheapestIndex(start, out, s, end, Math.min(cursor, hi), hi);
+    out.splice(pos, 0, s); cursor = pos + 1;
+  });
   return out;
 }
 function routeKey(pts) { return pts.map(p => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}${p.ferry ? "F" : ""}`).join(";"); }
