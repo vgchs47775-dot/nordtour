@@ -48,6 +48,7 @@ function normalizeState(s) {
     delete s.items_kaufen; changed = true;
   }
   s.settings = s.settings || {};
+  if (typeof normalizeRouteList === "function" && normalizeRouteList(s)) changed = true;   // gespeicherte Routen (varianten.js)
   if (!s.settings.main) { s.settings.main = { ...DEFAULT_MAIN }; changed = true; }
   return changed;
 }
@@ -106,7 +107,7 @@ function costSummary() {
   const m = main(), persons = Math.max(1, parseInt(m.persons, 10) || 1);
   const byCat = Object.fromEntries(COST_CATS.map(c => [c[0], 0]));
   let total = 0, open = 0, missing = 0;
-  for (const c of state.costs) {
+  for (const c of activeCosts()) {
     const a = Number(c.amount) || 0;
     byCat[COST_COLOR[c.cat] ? c.cat : "Sonstiges"] += a; total += a; if (!c.done) open += a;
     if (c.amount == null && !isNightPlaceholder(c) && !isTollPlaceholder(c)) missing++;
@@ -139,7 +140,7 @@ function renderCosts() {
   const dayById = Object.fromEntries(state.days.map(d => [d.id, d]));
   let html = "";
   for (const [cat, col] of COST_CATS) {
-    const all = state.costs.filter(c => (COST_COLOR[c.cat] ? c.cat : "Sonstiges") === cat);
+    const all = activeCosts().filter(c => (COST_COLOR[c.cat] ? c.cat : "Sonstiges") === cat);
     const ph = all.filter(isNightPlaceholder);
     const rows = all.filter(c => (showNightPh || !isNightPlaceholder(c)))
       .sort((a, b) => String(dayById[a.dayId]?.date || "9").localeCompare(String(dayById[b.dayId]?.date || "9")));
@@ -167,6 +168,8 @@ function renderCosts() {
       <span class="acts"><button type="button" class="btn ghost mini" data-phtoggle>${showNightPh ? "ausblenden" : "einzeln zeigen"}</button><button type="button" class="btn ghost mini" data-phdel>alle entfernen</button></span><span></span></div>`;
     html += `</div></details>`;
   }
+  const away = state.costs.length - activeCosts().length;
+  if (away) html += `<p class="hint">${away} Posten gehören zu Tagen anderer gespeicherter Routen und zählen hier nicht mit.</p>`;
   $("#costGroups").innerHTML = html || `<p class="empty">Noch keine Kosten eingetragen.</p>`;
   if (typeof renderFerryCheck === "function") renderFerryCheck();
 }
@@ -197,9 +200,9 @@ $("#sAutoToll").addEventListener("change", () => $("#fuelForm").requestSubmit())
 document.addEventListener("click", e => {
   if (e.target.closest("[data-phtoggle]")) { showNightPh = !showNightPh; renderCosts(); return; }
   if (e.target.closest("[data-phdel]")) {
-    const n = state.costs.filter(isNightPlaceholder).length;
+    const mine = new Set(activeCosts().filter(isNightPlaceholder).map(c => c.id)), n = mine.size;
     if (!confirm(`${n} leere Übernachtungs-Posten entfernen? Nächte mit Betrag oder Notiz bleiben erhalten.`)) return;
-    state.costs = state.costs.filter(c => !isNightPlaceholder(c)); showNightPh = false; commit(); updateStats();
+    state.costs = state.costs.filter(c => !mine.has(c.id)); showNightPh = false; commit(); updateStats();
     notice(`${n} leere Übernachtungs-Posten entfernt. Eine Unterkunft trägst du bei Bedarf unten unter „Neuer Kostenposten“ mit Kategorie Unterkunft und dem Tag ein.`);
   }
 });
@@ -397,6 +400,7 @@ function renderLists() {
   $("#kDay").innerHTML = `<option value="">– kein Tag –</option>` + sortedDays().map(d => `<option value="${esc(d.id)}"${d.id === cur ? " selected" : ""}>${fmtDate(d.date)} · ${esc(d.night || d.title)}</option>`).join("");
   renderCosts(); renderTodos(); renderPack(); renderBuy();
   if (typeof renderExtras === "function") renderExtras();
+  if (typeof renderRouteBar === "function") renderRouteBar();
   if (typeof renderSky === "function") renderSky();
   if (typeof renderJournal === "function") renderJournal();
   const openTodos = state.todos.filter(t => !t.done).length;

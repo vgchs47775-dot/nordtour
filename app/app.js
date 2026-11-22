@@ -44,11 +44,10 @@ function save() {
 function loadLocal() { try { const s = localStorage.getItem(STORE); return s ? JSON.parse(s) : null; } catch { return null; } }
 function loadRoutes() { try { routes = JSON.parse(localStorage.getItem(RSTORE)) || {}; } catch { routes = {}; } }
 function saveRoutes() {
-  // nur Routen behalten, die aktuell gebraucht werden
+  // nur aktuell gebrauchte Routen auf die Platte; im Arbeitsspeicher bleiben auch andere (schneller Routenwechsel)
   const used = new Set(sortedDays().map((d, i, l) => routeKey(dayPoints(d, i, l))));
   if (typeof extraRouteKeys === "function") extraRouteKeys().forEach(k => used.add(k));   // Vergleichsrouten
-  for (const k of Object.keys(routes)) if (!used.has(k)) delete routes[k];
-  try { localStorage.setItem(RSTORE, JSON.stringify(routes)); } catch { /* Cache ist optional */ }
+  try { localStorage.setItem(RSTORE, JSON.stringify(Object.fromEntries(Object.entries(routes).filter(([k]) => used.has(k))))); } catch { /* Cache ist optional */ }
 }
 async function loadDefault() {
   const r = await fetch("daten.json", { cache: "no-cache" });
@@ -269,6 +268,7 @@ new ResizeObserver(() => { map.invalidateSize(); if (pendingFit) fitAll(); }).ob
 
 function drawRoutes() {
   routeLayer.clearLayers();
+  if (!SHOW.route) return;                       // Route auf der Karte ausgeschaltet
   const list = sortedDays();
   list.forEach((d, i) => {
     const pts = dayPoints(d, i, list);
@@ -297,10 +297,10 @@ function icon(txt, cls, style = "") { return L.divIcon({ className: "", html: `<
 function drawMarkers() {
   markerLayer.clearLayers(); markers = {};
   const h = home();
-  L.marker([h.lat, h.lon], { icon: icon("H", "home"), keyboard: false })
+  if (SHOW.route) L.marker([h.lat, h.lon], { icon: icon("H", "home"), keyboard: false })
     .bindTooltip(`${esc(h.name)} – Start`, { className: "mtip" }).addTo(markerLayer);
   sortedDays().forEach((d, i) => {
-    if (!hasPos(d) || d.night === "zu Hause") return;
+    if (!SHOW.route || !hasPos(d) || d.night === "zu Hause") return;
     // Farbe nach Priorität des Ortes (prio.js)
     const pc = typeof nightMapColor === "function" ? nightMapColor(d) : null;
     const m = L.marker([d.lat, d.lon], { icon: icon(i + 1, (d.id === selDay ? "sel" : "") + (pc ? " prio" : ""), pc ? `--pc:${pc};--pi:${prioInk("o:" + ortSlug(d.night))}` : ""), draggable: !!window.mapEdit, title: d.night, riseOnHover: true });
@@ -467,7 +467,7 @@ function dayHtml(d, idx, list) {
 // Zwischenziele als Liste: Name (mit Suche), Aufenthalt, „ab hier Fähre“, sortieren, löschen
 function viaRow(v = {}) {
   const has = typeof v.lat === "number";
-  return `<div class="viarow" data-lat="${has ? v.lat : ""}" data-lon="${has ? v.lon : ""}" data-orig="${esc(v.name || "")}">
+  return `<div class="viarow" data-lat="${has ? v.lat : ""}" data-lon="${has ? v.lon : ""}" data-orig="${esc(v.name || "")}" data-extra="${esc(JSON.stringify({ wp: v.wp, anchor: v.anchor, key: v.key }))}">
     <span class="vmain"><input type="text" class="vname" maxlength="60" value="${esc(v.name || "")}" placeholder="Ort, z. B. Egersund" aria-label="Name des Zwischenziels">
       <button type="button" class="btn ghost mini" data-vsearch title="Ort suchen">Suchen</button></span>
     <span class="vopts">
@@ -535,6 +535,7 @@ function routeTotals() {
 }
 function updateStats() {
   const list = sortedDays(), t = routeTotals();
+  if (typeof renderRouteBar === "function" && document.activeElement?.id !== "routeSel") renderRouteBar();   // km in der Routenauswahl
   const days = Math.ceil((new Date(tripStart() + "T00:00:00") - new Date()) / 864e5);
   const openTodos = (state.todos || []).filter(x => !x.done).length;
   $("#sCount").innerHTML = days > 0 ? `${num(days)} <small>Tage</small>` : "unterwegs";
@@ -580,7 +581,7 @@ async function readVias(f) {
     const name = row.querySelector(".vname").value.trim(); if (!name) continue;
     let lat = parseFloat(row.dataset.lat), lon = parseFloat(row.dataset.lon);
     if (!isFinite(lat) || !isFinite(lon)) { const g = await geocode(name); lat = g.lat; lon = g.lon; }
-    const v = { name, lat, lon };
+    const v = { name, lat, lon, ...(name === row.dataset.orig ? JSON.parse(row.dataset.extra || "{}") : {}) };   // Kennzeichen aus planer.js behalten
     const stay = parseInt(row.querySelector(".vstayin").value, 10); if (stay > 0) v.stay = Math.min(1440, stay);
     if (row.querySelector(".vferryin").checked) v.ferry = true;
     out.push(v);
@@ -623,7 +624,7 @@ $("#days").addEventListener("click", async e => {
     catch (x) { pos.textContent = x.message; }
     btn.disabled = false; return;
   }
-  if (t.closest("[data-showday]")) { const id = t.closest("[data-showday]").dataset.showday; if (typeof setMapList === "function") setMapList("map"); selectDay(id); return; }
+  if (t.closest("[data-showday]")) { const id = t.closest("[data-showday]").dataset.showday; if (!SHOW.route) { SHOW.route = true; syncMapButtons(); redrawMap(); } if (typeof setMapList === "function") setMapList("map"); selectDay(id); return; }
   if (t.closest("button, input, textarea, a, form, label, select")) return;
   const li = t.closest("[data-day]"); if (!li) return;
   // Antippen: Tag auswählen und Details auf- bzw. zuklappen

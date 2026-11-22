@@ -105,11 +105,14 @@ function renderJournal() {
     ? `Texte werden wie alles andere gespeichert. <b>Fotos brauchen eine Anmeldung</b> (oben „Anmelden“) – sie liegen dann privat in deiner Supabase-Cloud.`
     : `Fotos werden verkleinert (max. ${MAX_EDGE} px) und privat in deiner Supabase-Cloud gespeichert. Ohne Internet warten sie, bis wieder Verbindung da ist.`;
   $("#journalQueue").textContent = (queue.length ? `${queue.length} Foto${queue.length > 1 ? "s warten" : " wartet"} auf das Hochladen${!navigator.onLine ? " (offline)" : !loggedIn ? " (bitte anmelden)" : qBusy ? " …" : ""}. ` : "") + (qErr ? "⚠ " + qErr : "");
-  const days = sortedDays().filter(d => !only || (state.journal?.[d.id]?.text || state.journal?.[d.id]?.photos?.length || queue.some(q => q.dayId === d.id)));
+  // Einträge an Tagen anderer gespeicherter Routen bleiben sichtbar
+  const here = new Set(state.days.map(d => d.id)), seen = new Set();
+  const others = otherRouteDays().filter(d => !here.has(d.id) && !seen.has(d.id) && seen.add(d.id) && (state.journal?.[d.id]?.text || state.journal?.[d.id]?.photos?.length || queue.some(q => q.dayId === d.id)));
+  const days = [...sortedDays(), ...others].filter(d => !only || (state.journal?.[d.id]?.text || state.journal?.[d.id]?.photos?.length || queue.some(q => q.dayId === d.id)));
   el.innerHTML = days.map(d => {
     const j = state.journal?.[d.id] || { text: "", photos: [] }, qs = queue.filter(q => q.dayId === d.id);
     return `<article class="jday" data-jday="${esc(d.id)}">
-      <h3>${fmtDate(d.date)} · Tag ${dayNo(d.date)} · ${esc(d.title || "")}</h3>
+      <h3>${fmtDate(d.date)} · Tag ${dayNo(d.date)} · ${esc(d.title || "")}${here.has(d.id) ? "" : " (andere Route)"}</h3>
       <textarea data-jtext="${esc(d.id)}" rows="3" placeholder="Was habt ihr heute erlebt?">${esc(j.text || "")}</textarea>
       <div class="jphotos">
         ${(j.photos || []).map(p => `<button type="button" class="jthumb" data-jphoto="${esc(d.id)}:${esc(p.id)}" aria-label="Foto ansehen${p.caption ? ": " + esc(p.caption) : ""}"><img data-path="${esc(p.path)}" alt="${esc(p.caption || "")}" loading="lazy" onerror="this.parentElement.classList.add('broken')"></button>`).join("")}

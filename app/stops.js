@@ -70,9 +70,9 @@ const stopIcon = (n, stay) => L.divIcon({ className: "", html: `<div class="stmk
 function drawStops() {
   stopLayer.clearLayers();
   if (typeof renderMapDay === "function") renderMapDay();
-  const d = state?.days.find(x => x.id === selDay); if (!d) return;
+  const d = state?.days.find(x => x.id === selDay); if (!d || !SHOW.route) return;
   (d.via || []).forEach((v, i) => {
-    if (!hasPos(v)) return;
+    if (!hasPos(v) || (v.wp && !window.mapEdit)) return;      // reine Wegpunkte nur beim Bearbeiten zeigen
     const m = L.marker([v.lat, v.lon], { icon: stopIcon(i + 1, v.stay), draggable: !!window.mapEdit, riseOnHover: true, zIndexOffset: 500 });
     m.bindTooltip(`${esc(v.name)}${v.stay ? ` · ${v.stay} min` : ""}`, { direction: "top", offset: [0, -10] });
     m.bindPopup(() => stopPopup(d, i), { minWidth: 220 });

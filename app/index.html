@@ -73,7 +73,7 @@
       <div class="mapday" id="mapDay" hidden></div>
       <div id="map" aria-label="Karte der Route. Übernachtungsorte lassen sich mit der Maus oder dem Finger verschieben."></div>
       <div class="map-foot">
-        <div class="legend"><span>Übernachtung (Tag)</span><span class="r">Route (live)</span><span class="f">Fähre (Schätzung)</span><span class="p">Panoramastraße</span><span class="s">Sehenswürdigkeit</span><span class="o">⛽ / 💧 beim gewählten Tag</span><span class="pp" style="--pc:var(--p-muss)">Muss</span><span class="pp" style="--pc:var(--p-stop)">Kleiner Stop reicht</span><span class="pp" style="--pc:var(--p-nice)">nice-to-have</span><span class="pp" style="--pc:var(--p-egal)">nicht unbedingt</span></div>
+        <div class="legend"><span>Übernachtung (Tag)</span><span class="r">Route (live)</span><span class="f">Fähre (Schätzung)</span><span class="p">Panoramastraße</span><span class="s">Sehenswürdigkeit</span><span class="pp" style="--pc:var(--p-muss)">Muss</span><span class="pp" style="--pc:var(--p-stop)">Kleiner Stop reicht</span><span class="pp" style="--pc:var(--p-nice)">nice-to-have</span><span class="pp" style="--pc:var(--p-egal)">nicht unbedingt</span></div>
         <span class="map-note">Punkte verschieben und Stopps anlegen: „✎ Karte bearbeiten“</span>
       </div>
     </div>
@@ -85,6 +85,15 @@
           <button class="btn ghost mini" type="button" id="btnReorder" aria-pressed="false">Reihenfolge ändern</button>
           <button class="btn ghost mini" type="button" id="btnExport">Sichern (JSON)</button>
           <label class="btn ghost mini" for="fileImport">Laden<input type="file" id="fileImport" accept="application/json,.json" hidden></label>
+        </div>
+      </div>
+      <div class="routebar">
+        <label class="lbl" for="routeSel">Gespeicherte Route<select id="routeSel"></select></label>
+        <div class="acts">
+          <button class="btn mini" type="button" id="btnGen">✨ Route aus Prioritäten</button>
+          <button class="btn ghost mini" type="button" id="btnRouteCopy">Speichern unter …</button>
+          <button class="btn ghost mini" type="button" id="btnRouteRename">Umbenennen</button>
+          <button class="btn danger mini" type="button" id="btnRouteDel" hidden>Löschen</button>
         </div>
       </div>
       <ol class="days" id="days"></ol>
@@ -292,6 +301,37 @@
   </div>
 </dialog>
 
+<dialog id="routeDlg" aria-labelledby="routeDlgTitle">
+  <form id="routeDlgForm">
+    <h2 id="routeDlgTitle">Route speichern unter</h2>
+    <p class="hint" id="routeDlgHint"></p>
+    <label class="lbl" for="routeDlgName">Name<input type="text" id="routeDlgName" maxlength="60" required></label>
+    <div class="acts"><button class="btn" type="submit">Speichern</button><button class="btn ghost" type="button" id="routeDlgCancel">Abbrechen</button></div>
+  </form>
+</dialog>
+
+<dialog id="genDlg" class="gendlg" aria-labelledby="genTitle">
+  <div class="toolbar"><h2 id="genTitle">✨ Route aus Prioritäten</h2><button class="btn ghost mini" type="button" id="genClose">Schließen</button></div>
+  <form id="genForm">
+    <p class="hint" id="genCounts"></p>
+    <div class="three">
+      <label class="lbl" for="gDrive">Fahrzeit pro Tag, max. (h)<input type="number" id="gDrive" min="2" max="12" step="0.5"></label>
+      <label class="lbl" for="gDays">Reisetage, höchstens<input type="number" id="gDays" min="2" max="90" step="1"></label>
+      <label class="lbl" for="gNice">Umweg je nice-to-have, max. (h)<input type="number" id="gNice" min="0" max="10" step="0.5"></label>
+    </div>
+    <div class="three">
+      <label class="lbl" for="gMuss">Zeit je Muss-Ort (h)<input type="number" id="gMuss" min="0" max="12" step="0.5"></label>
+      <label class="lbl" for="gStop">Zeit je kleinem Stop (h)<input type="number" id="gStop" min="0" max="6" step="0.25"></label>
+      <label class="lbl" for="gStayNice">Zeit je nice-to-have (h)<input type="number" id="gStayNice" min="0" max="12" step="0.5"></label>
+    </div>
+    <label class="toggle"><input type="checkbox" id="gAccess"> An- und Abreise wie in der Grundroute (gleiche Fähren und Brücken)</label>
+    <label class="toggle"><input type="checkbox" id="gUnprio"> Orte ohne Priorität wie „nice-to-have“ behandeln</label>
+    <p class="formerr" id="genErr"></p>
+    <div class="acts"><button class="btn" type="submit" id="genStart">Route berechnen</button><button class="btn ghost" type="button" id="genStop" hidden>Abbrechen</button><span class="hint" id="genProg" aria-live="polite"></span></div>
+  </form>
+  <div id="genResult"></div>
+</dialog>
+
 <dialog id="backupDlg" class="backupdlg" aria-labelledby="backupTitle">
   <div class="toolbar"><h2 id="backupTitle">Sicherungen</h2><div class="acts"><button class="btn mini" type="button" id="backupNow">Jetzt sichern</button><button class="btn ghost mini" type="button" id="backupClose">Schließen</button></div></div>
   <p class="hint" id="backupMsg"></p>
@@ -322,6 +362,8 @@
 <script src="ferries.js"></script>
 <script src="lists.js"></script>
 <script src="prio.js"></script>
+<script src="varianten.js"></script>
+<script src="planer.js"></script>
 <script src="sky.js"></script>
 <script src="aurora.js"></script>
 <script src="journal.js"></script>

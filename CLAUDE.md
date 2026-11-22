@@ -23,7 +23,7 @@ klassische Skripte in `app/`, die sich den globalen Gültigkeitsbereich teilen.
 
 ## Aufbau
 Ladereihenfolge (siehe Ende von `app/index.html`):
-`config → extras → app → stops → osm → toll → ferrycost → ferries → lists → prio → sky → aurora → journal → sync → cache → backup → pwa`
+`config → extras → app → stops → osm → toll → ferrycost → ferries → lists → prio → varianten → planer → sky → aurora → journal → sync → cache → backup → pwa`
 
 | Datei | Aufgabe |
 |---|---|
@@ -35,6 +35,8 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `lists.js` | Reiter, Kosten, To-dos, Packliste, Kaufen, `normalizeState()` für Datenumstellungen |
 | `theme.js` (im `<head>`) | Hell/Dunkel/Auto; CSS nur über `:root[data-theme="dark"]`, in JS `isDark()` und Ereignis `themechange` |
 | `prio.js` | Prioritäten für Panoramastraßen und Orte, Kartenfarben (`PRIO_COLORS`) |
+| `varianten.js` | mehrere Routen (`state.routeList`, `state.routeId`); gewählte Route liegt in `state.days`, nur andere haben `data` |
+| `planer.js` | Route aus Prioritäten; Kennzeichen an Punkten: `wp` (Wegpunkt), `anchor` (An-/Abreise), `key` (Ziel/eigener Ort), an Tagen `auto` (Schlafplatz unterwegs), `panos` |
 | `sky.js`, `aurora.js` | Nachthimmel, Kp-Prognose, Polarlicht-Karte (NOAA) |
 | `journal.js` | Tagebuch; Fotos im privaten Supabase-Bucket `tagebuch`, Warteschlange in IndexedDB |
 | `sync.js`, `cache.js`, `backup.js` | Cloud-Abgleich (`trips`), geteilter Zwischenspeicher (`route_cache`), Sicherungen (`trip_backups`) |
@@ -44,6 +46,7 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 - Neue Datei: in `index.html` **und** in `CORE` in `sw.js` eintragen, sonst fehlt sie offline.
 - Ändert sich das Format berechneter Routen: `RSTORE` hochzählen. Achtung, auch der Cloud-Cache `route_cache`
   liefert dann noch alte Einträge mit gleichem Schlüssel.
+- Kosten immer über `activeCosts()` auswerten (Posten anderer Routen zählen nicht). Grundroute (`base`) nie löschen.
 - Vorhandene Daten in der Cloud dürfen nie kaputtgehen: neue Felder über `normalizeState()` ergänzen.
 - `extras.json` wird auf dem PC der Person von einem Skript erzeugt, das nicht im Repository liegt. Wird die Datei
   hier von Hand geändert, im Pull Request deutlich darauf hinweisen, sonst geht die Änderung beim nächsten Erzeugen verloren.

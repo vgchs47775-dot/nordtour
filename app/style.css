@@ -499,3 +499,21 @@ nav.tabs { -webkit-mask-image: none; mask-image: none; padding-right: 0; gap: 0;
 @media (max-width: 1060px) { .ortrow { grid-template-columns: 1fr auto; } .ortrow .prioseg { grid-column: 1 / -1; grid-row: 2; } }
 @media (max-width: 560px) { .ortrow { grid-template-columns: 1fr; } .ortrow .acts { justify-content: flex-start; } .ortrow .prioseg { grid-row: auto; } }
 @media (pointer: coarse) { .pb { min-height: 38px; padding: 6px 13px; } .leaflet-popup-content .pb { min-height: 34px; } .fchip { min-height: 38px; } }
+
+/* Karte: weitere Ebenen-Knöpfe, Tank/Wasser-Schalter je Etappe */
+.map-layers button[data-maplayer="route"][aria-pressed="true"] { background: #1f4e63; color: #fff; }
+.map-layers button[data-maplayer="fuel"][aria-pressed="true"], .map-layers button[data-maplayer="water"][aria-pressed="true"] { background: #ffe2bd; }
+.map-layers button[aria-pressed="false"] { opacity: .75; }
+.osmbtns .btn[aria-pressed="true"] { border-color: var(--fjord); background: var(--bg); }
+
+/* ===== Gespeicherte Routen und Routenplaner ===== */
+.routebar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: end; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin-bottom: 10px; }
+.routebar .lbl { flex: 1 1 220px; min-width: 0; }
+.gendlg { width: min(720px, calc(100% - 24px)); max-height: 92vh; overflow-y: auto; }
+.gendlg .toggle { color: var(--ink); }
+@media (max-width: 560px) { .gendlg .three { grid-template-columns: 1fr; } }
+.genres { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; display: grid; gap: 10px; }
+.genres .big { margin: 0; }
+.genres ul, .genres ol { margin: 0; padding-left: 20px; font-size: 13.5px; }
+.genres details > summary { cursor: pointer; font-weight: 600; }
+.genwarn { background: var(--sun-soft); color: var(--warn); border-radius: 8px; padding: 8px 10px; font-size: 14px; }

@@ -81,11 +81,20 @@ function allOrte() {
   };
   days.forEach((d, i) => {
     // Fähranleger sind nur Wegpunkte, keine Orte zum Priorisieren
-    for (const v of d.via || []) if (hasPos(v) && v.name && !/ferjekai|fähranleger|hurtigrutenkai/i.test(v.name)) add(v.name, "stop", v.lat, v.lon, i);
-    if (hasPos(d) && d.night && !/zu hause/i.test(d.night)) add(d.night, "night", d.lat, d.lon, i);
+    for (const v of d.via || []) if (hasPos(v) && v.name && !v.wp && !v.key?.startsWith("s:") && !v.key?.startsWith("p:") && !/ferjekai|fähranleger|hurtigrutenkai/i.test(v.name)) add(v.name, "stop", v.lat, v.lon, i);
+    if (hasPos(d) && d.night && !d.auto && !d.key?.startsWith("s:") && !d.key?.startsWith("p:") && !/zu hause/i.test(d.night)) add(d.night, "night", d.lat, d.lon, i);
   });
+  // Orte, die nur in anderen gespeicherten Routen vorkommen
+  for (const d of otherRouteDays()) {
+    const away = (name, type, lat, lon) => {
+      const key = "o:" + ortSlug(name); if (byKey.has(key)) return;
+      const n = { key, name: nightBase(name), type, lat, lon, days: [], idx: 999, away: true }; byKey.set(key, n); out.push(n);
+    };
+    for (const v of d.via || []) if (hasPos(v) && v.name && !v.wp && !v.key && !/ferjekai|fähranleger|hurtigrutenkai/i.test(v.name)) away(v.name, "stop", v.lat, v.lon);
+    if (hasPos(d) && d.night && !d.auto && !d.key && !/zu hause/i.test(d.night)) away(d.night, "night", d.lat, d.lon);
+  }
   for (const s of SIGHTS()) {
-    const i = days.findIndex(d => d.id === s.day);
+    const i = days.findIndex(d => d.id === sightDayId(s));
     out.push({ key: "s:" + s.id, id: s.id, name: s.name, type: "sight", lat: s.lat, lon: s.lon, days: i < 0 ? [] : [i], idx: i < 0 ? 998 : i, sub: s.type });
   }
   const nights = days.map((d, i) => ({ d, i })).filter(x => hasPos(x.d));
@@ -94,10 +103,15 @@ function allOrte() {
     const near = nights.reduce((a, x) => { const km = hav(p, x.d); return !a || km < a.km ? { km, i: x.i, d: x.d } : a; }, null);
     out.push({ key: "p:" + p.id, id: p.id, name: p.name, type: "own", lat: p.lat, lon: p.lon, days: [], idx: near ? near.i : 999, near });
   }
+  for (const o of out) if (o.away) {
+    o.near = nights.reduce((a, x) => { const km = hav(o, x.d); return !a || km < a.km ? { km, i: x.i, d: x.d } : a; }, null);
+    if (o.near) o.idx = o.near.i;
+  }
   return out.sort((a, b) => a.idx - b.idx || a.name.localeCompare(b.name, "de"));
 }
 function ortWhen(o) {
   const days = sortedDays();
+  if (o.away) return `nicht in dieser Route${o.near ? ` · ${num(o.near.km)} km von ${nightBase(o.near.d.night)}` : ""}`;
   if (o.type === "own") return o.near ? `${num(o.near.km)} km von ${nightBase(o.near.d.night)} (Tag ${dayNo(o.near.d.date)})` : "";
   return o.days.length ? o.days.map(i => `${fmtDate(days[i].date)} (Tag ${dayNo(days[i].date)})`).join(", ") : "kein passender Reisetag";
 }
@@ -140,7 +154,8 @@ function drawOrte() {
   if (!state || !SHOW.orte) return;
   for (const o of allOrte()) {
     const p = ortPrio(o.key);
-    if (o.type === "night" || o.type === "sight" || (o.type === "stop" && !p)) continue;
+    // Übernachtungen tragen die Farbe an ihrer Nummer – bei ausgeschalteter Route als Stecknadel
+    if (o.type === "sight" || (o.type === "night" && ((SHOW.route && o.days.length) || !p)) || (o.type === "stop" && !p)) continue;
     const m = L.marker([o.lat, o.lon], { icon: ortPin(p ? prioColor(p) : "#78909c"), riseOnHover: true, zIndexOffset: 200, title: o.name });
     m.bindTooltip(`${esc(o.name)}${p ? " · " + PRIO_LABEL[p] : ""}`, { direction: "top" });
     m.bindPopup(() => ortPopup(o.key), { maxWidth: 300, minWidth: 220 });
@@ -161,7 +176,7 @@ function showOrtOnMap(key) {
     map.invalidateSize(); pendingFit = false;
     if (!SHOW.orte) { SHOW.orte = true; syncMapButtons(); drawMarkers(); drawExtras(); drawOrte(); }
     map.setView([o.lat, o.lon], 10, { animate: false });
-    if (o.type === "night") { const d = sortedDays()[o.days[0]]; selectDay(d.id, false); markers[d.id]?.openTooltip(); }
+    if (o.type === "night" && SHOW.route && o.days.length) { const d = sortedDays()[o.days[0]]; selectDay(d.id, false); markers[d.id]?.openTooltip(); }
     else if (ortMarkers[key]) ortMarkers[key].openPopup();
     else L.popup().setLatLng([o.lat, o.lon]).setContent(ortPopup(key)).openOn(map);
     $(".mapbox").scrollIntoView({ block: "start" });

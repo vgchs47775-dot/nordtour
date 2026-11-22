@@ -13,8 +13,7 @@ let osmData = {}, osmStatus = {}, osmBusy = false;
 try { osmData = JSON.parse(localStorage.getItem(OSTORE)) || {}; } catch { osmData = {}; }
 function saveOsm() {
   const used = new Set(sortedDays().map((d, i, l) => routeKey(dayPoints(d, i, l))));
-  for (const k of Object.keys(osmData)) if (!used.has(k)) delete osmData[k];
-  try { localStorage.setItem(OSTORE, JSON.stringify(osmData)); } catch { /* Speicher voll – dann eben neu laden */ }
+  try { localStorage.setItem(OSTORE, JSON.stringify(Object.fromEntries(Object.entries(osmData).filter(([k]) => used.has(k))))); } catch { /* Speicher voll – dann eben neu laden */ }
 }
 
 /* ---------- Geometrie ---------- */
@@ -117,7 +116,7 @@ async function ensureOsm() {
         osmStatus[key] = { retry: Date.now() + 10 * 60e3 }; console.warn("Overpass", d.id, e);
         renderDay(d.id); break;
       }
-      renderDay(d.id); if (d.id === selDay) drawOsm();
+      renderDay(d.id); drawOsm();
       await sleep(1500);                                  // den freiwilligen Overpass-Server schonen
     }
   } finally { osmBusy = false; }
@@ -151,24 +150,52 @@ function osmDayHtml(d, r) {
   const nearNight = o.water.filter(w => w.night <= 5).sort((a, b) => a.night - b.night)[0];
   const onRoute = o.water.length;
   const waterTxt = `<span class="osm water">💧 ${onRoute ? `${onRoute} Trinkwasser-Stelle${onRoute > 1 ? "n" : ""} an der Strecke` : "Kein Trinkwasser an der Strecke bekannt"}${nearNight ? ` · nächste zur Übernachtung ${String(nearNight.night).replace(".", ",")} km` : onRoute ? " · keine bekannte Stelle bei der Übernachtung" : ""}</span>`;
-  return fuelTxt + waterTxt;
+  return fuelTxt + waterTxt + osmDayButtons(d);
 }
 
-/* ---------- Karte: Tankstellen & Wasser des gewählten Tages ---------- */
+/* ---------- Karte: Tankstellen & Wasser – nur auf Wunsch ----------
+   Schalter ⛽/💧 auf der Karte: alle Stellen der ganzen Route, aber nur im sichtbaren Ausschnitt ab Zoom 8
+   (sonst wären es Tausende Punkte). Schalter in einer Etappe: alle Stellen dieser Etappe, bei jedem Zoom. */
+const OSM_MIN_ZOOM = 8, OSM_MAX = 400;
+const osmDayOn = { fuel: new Set(), water: new Set() };
 const osmLayer = L.layerGroup().addTo(map);
 const osmIcon = (txt, cls) => L.divIcon({ className: "", html: `<div class="omk ${cls}">${txt}</div>`, iconSize: [20, 20], iconAnchor: [10, 10] });
+const fuelPop = (f, d) => `<div class="pop"><b>${esc(f.name)}</b><span>${f.brand && f.brand !== f.name ? esc(f.brand) + " · " : ""}km ${num(f.km)} am ${fmtDate(d.date)}${f.auto ? " · Automat (Karte)" : ""}</span>${f.oh ? `<span>Öffnungszeiten: ${esc(f.oh)}</span>` : ""}</div>`;
+const waterPop = (w, d) => `<div class="pop"><b>${esc(w.name || "Trinkwasser")}</b><span>km ${num(w.km)} am ${fmtDate(d.date)} · ${String(w.night).replace(".", ",")} km von der Übernachtung</span>${w.seasonal ? `<span>saisonal: ${esc(w.seasonal)}</span>` : ""}${w.note ? `<span>${esc(w.note)}</span>` : ""}<span class="hint">Daten aus OpenStreetMap – vor Ort prüfen</span></div>`;
 function drawOsm() {
-  osmLayer.clearLayers();
-  const d = state?.days.find(x => x.id === selDay); if (!d) return;
-  const { o } = osmFor(d); if (!o) return;
-  for (const f of o.fuel) {
-    L.marker([f.lat, f.lon], { icon: osmIcon("⛽", "fuel"), keyboard: false })
-      .bindPopup(`<div class="pop"><b>${esc(f.name)}</b><span>${f.brand && f.brand !== f.name ? esc(f.brand) + " · " : ""}km ${num(f.km)} der Etappe${f.auto ? " · Automat (Karte)" : ""}</span>${f.oh ? `<span>Öffnungszeiten: ${esc(f.oh)}</span>` : ""}</div>`)
-      .addTo(osmLayer);
-  }
-  for (const w of o.water) {
-    L.marker([w.lat, w.lon], { icon: osmIcon("💧", "water"), keyboard: false })
-      .bindPopup(`<div class="pop"><b>${esc(w.name || "Trinkwasser")}</b><span>km ${num(w.km)} der Etappe · ${String(w.night).replace(".", ",")} km von der Übernachtung</span>${w.seasonal ? `<span>saisonal: ${esc(w.seasonal)}</span>` : ""}${w.note ? `<span>${esc(w.note)}</span>` : ""}<span class="hint">Daten aus OpenStreetMap – vor Ort prüfen</span></div>`)
-      .addTo(osmLayer);
+  osmLayer.clearLayers(); if (!state) return;
+  const zoomOk = map.getZoom() >= OSM_MIN_ZOOM, b = map.getBounds(), seen = new Set();
+  let n = 0;
+  for (const d of sortedDays()) {
+    const need = k => osmDayOn[k].has(d.id) || (SHOW[k] && zoomOk);
+    if (!need("fuel") && !need("water")) continue;
+    const { o } = osmFor(d); if (!o) continue;
+    for (const [k, list, txt, pop] of [["fuel", o.fuel, "⛽", fuelPop], ["water", o.water, "💧", waterPop]]) {
+      if (!need(k)) continue;
+      for (const x of list) {
+        const id = k + x.lat + "," + x.lon;
+        if (seen.has(id) || (!osmDayOn[k].has(d.id) && (!b.contains([x.lat, x.lon]) || n >= OSM_MAX))) continue;
+        seen.add(id); n++;
+        L.marker([x.lat, x.lon], { icon: osmIcon(txt, k), keyboard: false }).bindPopup(pop(x, d)).addTo(osmLayer);
+      }
+    }
   }
 }
+map.on("moveend", () => { if ((SHOW.fuel || SHOW.water) && !map._popup?.isOpen?.()) drawOsm(); });
+function osmZoomHint(layer) {
+  if ((layer === "fuel" || layer === "water") && SHOW[layer] && !sortedDays().some(d => osmFor(d).o)) {
+    notice("Für diese Route sind noch keine Tank- und Wasserstellen geladen (der freie Server ist oft überlastet). Die App versucht es weiter."); return;
+  }
+  if ((layer === "fuel" || layer === "water") && SHOW[layer] && map.getZoom() < OSM_MIN_ZOOM)
+    notice(`${layer === "fuel" ? "Tankstellen" : "Trinkwasser"} an der Route: Bitte näher heranzoomen, dann erscheinen die Stellen im Kartenausschnitt.`);
+}
+function osmDayButtons(d) {
+  return `<span class="acts osmbtns">${[["fuel", "⛽ auf der Karte"], ["water", "💧 auf der Karte"]].map(([k, l]) =>
+    `<button type="button" class="btn ghost mini" data-osmday="${k}|${esc(d.id)}" aria-pressed="${osmDayOn[k].has(d.id)}">${osmDayOn[k].has(d.id) ? "✓ " : ""}${l}</button>`).join("")}</span>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-osmday]"); if (!b) return;
+  const [k, id] = b.dataset.osmday.split("|"), s = osmDayOn[k];
+  s.has(id) ? s.delete(id) : s.add(id);
+  renderDay(id); drawOsm();
+});

@@ -8,7 +8,7 @@
 
 let EXTRAS = null;
 let panoGen = 0, panoBusy = false;
-const SHOW = { pano: true, sights: true, orte: true };
+const SHOW = { route: true, pano: true, sights: true, orte: true, fuel: false, water: false };   // Ebenen der Karte
 
 async function loadExtras() {
   try {
@@ -27,6 +27,9 @@ function togglePlanned(kind, id) {
   set.has(id) ? set.delete(id) : set.add(id);
   state.settings[key] = [...set];
   save(); refresh();
+  const p = kind === "pano" && PANO().find(x => x.id === id);
+  if (p && !state.days.some(d => p.days.includes(d.id)))
+    notice("Diese Route wurde aus Prioritäten erstellt: Einplanen ändert hier die Strecke nicht. Setze eine Priorität und erstelle die Route neu.");
 }
 
 /* ================= Panoramastraßen → Wegpunkte ================= */
@@ -86,8 +89,16 @@ async function ensurePanoRoutes() {
 }
 
 /* ================= Tag in der Routenliste ================= */
+// Reisetag eines Ziels: der vorgesehene Tag – in anderen Routen der Tag, der am nächsten vorbeikommt (bis 80 km)
+function sightDayId(x) {
+  if (state.days.some(d => d.id === x.day)) return x.day;
+  let best = null, bd = 80;
+  for (const d of state.days) for (const p of [d, ...(d.via || [])]) if (hasPos(p)) { const km = hav(p, x); if (km < bd) { bd = km; best = d.id; } }
+  return best;
+}
 function dayProgram(d) {
-  const list = SIGHTS().filter(x => x.day === d.id && isPlanned("sights", x.id));
+  // als Stopp in der Route enthaltene Ziele nicht doppelt zählen (v.key, siehe planer.js)
+  const list = SIGHTS().filter(x => sightDayId(x) === d.id && isPlanned("sights", x.id) && !(d.via || []).some(v => v.key === "s:" + x.id));
   return { list, visit: list.reduce((a, x) => a + x.visit, 0), detour: list.reduce((a, x) => a + x.detour, 0) };
 }
 function dayExtrasHtml(d, r) {
@@ -95,8 +106,8 @@ function dayExtrasHtml(d, r) {
     (typeof skyLine === "function" ? skyLine(d) : "");
   if (!EXTRAS) return sky;
   let h = "";
-  for (const p of PANO().filter(p => isPlanned("pano", p.id) && p.days.includes(d.id))) {
-    const part = p.days.length > 1 ? ` (Teil ${p.days.indexOf(d.id) + 1} von ${p.days.length})` : "";
+  for (const p of PANO().filter(p => isPlanned("pano", p.id) && (p.days.includes(d.id) || d.panos?.includes(p.id)))) {
+    const part = p.days.length > 1 && p.days.includes(d.id) ? ` (Teil ${p.days.indexOf(d.id) + 1} von ${p.days.length})` : "";
     h += `<span class="pano">Über ${esc(p.name)}${part}</span>`;
   }
   // Tagesprogramm: eingeplante Sehenswürdigkeiten + Aufenthalte an eigenen Stopps
@@ -131,7 +142,7 @@ function galStep(fig, step) {
 }
 
 /* ================= Reiter Panoramastraßen ================= */
-function panoDays(p) { return p.days.map(id => state.days.find(d => d.id === id)).filter(Boolean).sort((a, b) => a.date.localeCompare(b.date)); }
+function panoDays(p) { return state.days.filter(d => p.days.includes(d.id) || d.panos?.includes(p.id)).sort((a, b) => a.date.localeCompare(b.date)); }
 function panoWhen(p) {
   const ds = panoDays(p); if (!ds.length) return "kein passender Reisetag";
   const a = ds[0], b = ds[ds.length - 1];
@@ -171,8 +182,8 @@ function renderPano() {
 function renderSights() {
   const el = document.getElementById("sightList"); if (!el || !EXTRAS) return;
   const only = $("#sightOnly").checked, list = sortedDays();
-  const groups = list.map((d, i) => ({ d, i, xs: SIGHTS().filter(x => x.day === d.id && (!only || isPlanned("sights", x.id))) }));
-  const orphan = SIGHTS().filter(x => !list.some(d => d.id === x.day) && (!only || isPlanned("sights", x.id)));
+  const groups = list.map((d, i) => ({ d, i, xs: SIGHTS().filter(x => sightDayId(x) === d.id && (!only || isPlanned("sights", x.id))) }));
+  const orphan = SIGHTS().filter(x => !list.some(d => d.id === sightDayId(x)) && (!only || isPlanned("sights", x.id)));
   el.innerHTML = groups.filter(g => g.xs.length).map(g => `<div class="sday">
       <h3>${fmtDate(g.d.date)} · Tag ${dayNo(g.d.date)} · ${esc(g.d.title || "")}</h3>
       <div class="cards">${g.xs.map(sightCard).join("")}</div></div>`).join("") +
@@ -257,6 +268,8 @@ function showOnMap(key) {
     $(".mapbox").scrollIntoView({ behavior: "smooth", block: "start" });
   }, 50);
 }
+// Nach dem Umschalten einer Ebene alles neu zeichnen
+function redrawMap() { map.closePopup(); drawRoutes(); drawMarkers(); drawExtras(); drawOrte(); }
 function syncMapButtons() {
   document.querySelectorAll("[data-maplayer]").forEach(b => b.setAttribute("aria-pressed", SHOW[b.dataset.maplayer] ? "true" : "false"));
 }
@@ -277,9 +290,12 @@ window.addEventListener("DOMContentLoaded", () => {
   const Ctl = L.Control.extend({
     onAdd() {
       const div = L.DomUtil.create("div", "leaflet-bar map-layers");
-      div.innerHTML = `<button type="button" data-maplayer="pano" aria-pressed="true" title="Panoramastraßen ein-/ausblenden">P</button>` +
+      div.innerHTML = `<button type="button" data-maplayer="route" aria-pressed="true" title="Route ein-/ausblenden">R</button>` +
+        `<button type="button" data-maplayer="pano" aria-pressed="true" title="Panoramastraßen ein-/ausblenden">P</button>` +
         `<button type="button" data-maplayer="sights" aria-pressed="true" title="Sehenswürdigkeiten ein-/ausblenden">S</button>` +
-        `<button type="button" data-maplayer="orte" aria-pressed="true" title="Prioritäten der Orte ein-/ausblenden">O</button>`;
+        `<button type="button" data-maplayer="orte" aria-pressed="true" title="Prioritäten der Orte ein-/ausblenden">O</button>` +
+        `<button type="button" data-maplayer="fuel" aria-pressed="false" title="Tankstellen an der Route ein-/ausblenden">⛽</button>` +
+        `<button type="button" data-maplayer="water" aria-pressed="false" title="Trinkwasser an der Route ein-/ausblenden">💧</button>`;
       L.DomEvent.disableClickPropagation(div);
       return div;
     }
@@ -294,7 +310,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const gn = e.target.closest("[data-galnav]");
     if (gn) { galStep(gn.closest(".gal"), +gn.dataset.galnav); return; }
     const ml = e.target.closest("[data-maplayer]");
-    if (ml) { SHOW[ml.dataset.maplayer] = !SHOW[ml.dataset.maplayer]; syncMapButtons(); if (ml.dataset.maplayer === "orte") { drawMarkers(); drawOrte(); } drawExtras(); }
+    if (ml) { SHOW[ml.dataset.maplayer] = !SHOW[ml.dataset.maplayer]; syncMapButtons(); redrawMap(); osmZoomHint(ml.dataset.maplayer); }
   });
   $("#sightOnly").addEventListener("change", renderSights);
   window.addEventListener("hashchange", () => { if (location.hash === "#panorama") ensurePanoRoutes(); });

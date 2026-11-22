@@ -18,6 +18,7 @@ function usedKeys() {
   const r = new Set(), o = new Set();
   sortedDays().forEach((d, i, l) => { const k = routeKey(dayPoints(d, i, l)); r.add(k); o.add(k); });
   if (typeof extraRouteKeys === "function") extraRouteKeys().forEach(k => r.add(k));
+  for (const e of state.routeList || []) for (const k of e.keys || []) { r.add(k); o.add(k); }   // andere gespeicherte Routen nicht wegräumen
   return { r, o };
 }
 async function loadCloudCache() {

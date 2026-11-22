@@ -26,7 +26,7 @@ const ignoredFerries = () => state.settings?.ferryIgnore || [];
 function ferryCheck() {
   const list = sortedDays(), missing = [], orphans = [];
   let unknownDays = 0;
-  const fc = state.costs.filter(c => c.cat === "Fähren");
+  const fc = activeCosts().filter(c => c.cat === "Fähren");
   list.forEach((d, i) => {
     const pts = dayPoints(d, i, list); if (pts.length < 2) return;
     const r = routes[routeKey(pts)];
