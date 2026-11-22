@@ -13,8 +13,10 @@ const panoWay = p => p.way?.length > 1 ? p.way : [p.geom[0], p.geom[p.geom.lengt
 
 /* ---------- Wie viel wird gefahren? ---------- */
 // Linie → Zellen von etwa 1 km mit Punkten alle 0,2 km; nur in der Nähe der Panoramastraßen
-let panoBox = null;
+let panoBox = null, panoRev = -1;
+function checkRev() { PANO(); if (panoRev !== extrasRev) { panoRev = extrasRev; panoBox = null; dayCells.clear(); shareMemo.clear(); } }   // Verlauf geändert
 function lineCells(lines) {
+  checkRev();
   panoBox = panoBox || PANO().map(p => [Math.min(...p.geom.map(q => q[0])) - .02, Math.max(...p.geom.map(q => q[0])) + .02, Math.min(...p.geom.map(q => q[1])) - .04, Math.max(...p.geom.map(q => q[1])) + .04]);
   const inBox = (la, lo) => panoBox.some(b => la > b[0] && la < b[1] && lo > b[2] && lo < b[3]), cells = new Map();
   for (const l of lines) for (let i = 1; i < l.length; i++) {
@@ -47,6 +49,7 @@ function coverOf(p, cellMaps) {
 const dayCells = new Map(), shareMemo = new Map();
 // Anteil in der aktuellen Route; null, solange noch Etappen berechnet werden
 function panoShare(p) {
+  checkRev();
   const list = sortedDays(), keys = [];
   for (let i = 0; i < list.length; i++) {
     const pts = dayPoints(list[i], i, list); if (pts.length < 2) continue;

@@ -16,8 +16,25 @@ async function loadExtras() {
     EXTRAS = r.ok ? await r.json() : null;
   } catch { EXTRAS = null; }
 }
-const PANO = () => EXTRAS?.pano || [];
-const SIGHTS = () => EXTRAS?.sights || [];
+// Straßen und Ziele mit den eigenen Änderungen (state.settings.extrasCfg, siehe bearbeiten.js); gelöschte fehlen
+let extrasRev = 0;
+const extrasMemo = {};
+function extrasList(kind) {
+  const raw = EXTRAS?.[kind], cfg = state?.settings?.extrasCfg?.[kind], m = extrasMemo[kind];
+  if (!raw) return [];
+  if (m && m.raw === raw && m.cfg === cfg) return m.list;
+  const list = raw.filter(x => !cfg?.[x.id]?.gone).map(x => {
+    const c = cfg?.[x.id]; if (!c || !Object.keys(c).length) return x;
+    // eigener Verlauf: die vorbereiteten Reisetage und Varianten gelten nicht mehr
+    return { ...x, ...c, ...(kind === "pano" && c.geom ? { custom: true, days: [], fallbackExtra: "" } : {}) };
+  });
+  extrasMemo[kind] = { raw, cfg, list }; extrasRev++;
+  return list;
+}
+const PANO = () => extrasList("pano");
+const SIGHTS = () => extrasList("sights");
+const panoUsable = id => PANO().some(p => p.id === id && !p.custom);      // gelten die vorbereiteten Varianten (extras.json)?
+const panoHasVariant = id => panoUsable(id) && state.days.some(d => !d.split && EXTRAS.variants?.[d.id]?.[id]);
 const plannedList = kind => state?.settings?.[kind === "pano" ? "panorama_geplant" : "sights_geplant"] || [];
 const isPlanned = (kind, id) => plannedList(kind).includes(id);
 function togglePlanned(kind, id) {
@@ -30,7 +47,7 @@ function togglePlanned(kind, id) {
   save(); refresh();
   const p = kind === "pano" && set.has(id) && PANO().find(x => x.id === id);
   // Hat kein Reisetag dieser Route eine fertige Variante, werden die Wegpunkte fest eingebaut (panowege.js)
-  if (p && !state.days.some(d => !d.split && EXTRAS.variants?.[d.id]?.[id]) && !(panoShare(p) >= 0.9) && completePano(id) != null)
+  if (p && !panoHasVariant(id) && !(panoShare(p) >= 0.9) && completePano(id) != null)
     notice(`🏞 ${esc(p.name)} ist jetzt ganz in der Route. Einzelne Tage können länger werden.`, true);
 }
 
@@ -38,7 +55,7 @@ function togglePlanned(kind, id) {
 // Liefert die Zwischenziele eines Tages mit den eingeplanten Panoramastraßen – oder null.
 function panoVia(d) {
   const vs = EXTRAS?.variants?.[d.id]; if (!vs || d.split) return null;      // geteilte Etappe: Wegpunkte stehen fest in d.via (etappen.js)
-  const ids = [...new Set(Object.keys(vs).flatMap(k => k.split("+")))].filter(id => isPlanned("pano", id)).sort();
+  const ids = [...new Set(Object.keys(vs).flatMap(k => k.split("+")))].filter(id => isPlanned("pano", id) && panoUsable(id)).sort();
   return ids.length ? vs[ids.join("+")] || null : null;
 }
 // Punkte zum Vergleich: Tag ohne Panoramastraße und Tag nur mit dieser einen Straße
@@ -65,7 +82,7 @@ function panoDelta(p) {
 const fmtShort = h => { const m = Math.round(h * 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`; };
 const fmtDelta = (km, h) => `${km >= 0 ? "+" : "−"}${num(Math.abs(km))} km · ${h >= 0 ? "+" : "−"}${fmtShort(Math.abs(h))}`;
 function panoExtraText(p) {
-  if (!p.days.some(id => EXTRAS.variants?.[id]?.[p.id])) return p.days.length ? "liegt auf der Route" : p.fallbackExtra;
+  if (!p.days.some(id => EXTRAS.variants?.[id]?.[p.id])) return p.custom ? "eigener Verlauf" : p.days.length ? "liegt auf der Route" : p.fallbackExtra;
   const dl = panoDelta(p);
   if (!dl) return panoBusy ? "Umweg wird berechnet …" : p.fallbackExtra;
   return fmtDelta(dl.km, dl.h) + (dl.n > 1 ? " über beide Tage" : " gegenüber der normalen Etappe");
@@ -173,6 +190,8 @@ function renderPano() {
       <div class="acts">
         <button type="button" class="btn ${on ? "moss" : "ghost"} mini" data-plan="pano:${esc(p.id)}">${on ? "✓ Eingeplant" : "Einplanen"}</button>
         <button type="button" class="btn ghost mini" data-showmap="pano:${esc(p.id)}">Auf der Karte</button>
+        <button type="button" class="btn ghost mini" data-edit-x="pano|${esc(p.id)}">Bearbeiten</button>
+        <button type="button" class="btn danger mini" data-del-x="pano|${esc(p.id)}">Löschen</button>
         <a class="btn go mini" href="${esc(panoMapsUrl(p))}" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>
       </div>
     </article>`;
@@ -205,6 +224,8 @@ function sightCard(x) {
     <div class="acts">
       <button type="button" class="btn ${on ? "sight" : "ghost"} mini" data-plan="sights:${esc(x.id)}">${on ? "✓ Eingeplant" : "Einplanen"}</button>
       <button type="button" class="btn ghost mini" data-showmap="sight:${esc(x.id)}">Auf der Karte</button>
+      <button type="button" class="btn ghost mini" data-edit-x="sights|${esc(x.id)}">Bearbeiten</button>
+      <button type="button" class="btn danger mini" data-del-x="sights|${esc(x.id)}">Löschen</button>
       <a class="btn go mini" href="https://www.google.com/maps/search/?api=1&query=${x.lat},${x.lon}" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>
     </div>
   </article>`;
@@ -218,14 +239,14 @@ function popupPano(p) {
   return `<div class="pop" data-pop="pano|${esc(p.id)}">${gallery("pano:" + p.id)}<b>${esc(p.name)}</b><span>${esc(panoWhen(p))} · ${esc(panoExtraText(p))}</span>
     ${prioButtons("pano", p.id, p.name)}
     <div class="acts"><button type="button" class="btn ${on ? "moss" : "ghost"} mini" data-plan="pano:${esc(p.id)}">${on ? "✓ Eingeplant" : "Einplanen"}</button>
-    <a class="btn ghost mini" href="#panorama">Details</a></div></div>`;
+    <a class="btn ghost mini" href="#panorama">Details</a><button type="button" class="btn ghost mini" data-edit-x="pano|${esc(p.id)}">Bearbeiten</button></div></div>`;
 }
 function popupSight(x) {
   const on = isPlanned("sights", x.id);
   return `<div class="pop" data-pop="sight|${esc(x.id)}">${gallery("sight:" + x.id)}<b>${esc(x.name)}</b><span>${esc(x.type)} · ${fmtShort(x.visit)}${x.detour ? ` + ${fmtShort(x.detour)} Umweg` : ""}</span>
     <span class="tipdesc">${esc(x.desc)}</span>
     ${prioButtons("ort", "s:" + x.id, x.name)}
-    <div class="acts"><button type="button" class="btn ${on ? "sight" : "ghost"} mini" data-plan="sights:${esc(x.id)}">${on ? "✓ Eingeplant" : "Einplanen"}</button></div></div>`;
+    <div class="acts"><button type="button" class="btn ${on ? "sight" : "ghost"} mini" data-plan="sights:${esc(x.id)}">${on ? "✓ Eingeplant" : "Einplanen"}</button><button type="button" class="btn ghost mini" data-edit-x="sights|${esc(x.id)}">Bearbeiten</button></div></div>`;
 }
 function drawExtras() {
   if (!EXTRAS || !panoLayer) return;
@@ -281,7 +302,7 @@ function syncMapButtons() {
 function renderExtras() {
   if (!EXTRAS) return;
   renderPano(); renderSights(); drawExtras();
-  renderOrte(); drawOrte();
+  renderOrte(); drawOrte(); if (typeof renderGone === "function") renderGone();
   $("#nPano").textContent = plannedList("pano").length;
   $("#nSights").textContent = plannedList("sights").length;
 }

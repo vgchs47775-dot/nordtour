@@ -570,3 +570,16 @@ nav.tabs { -webkit-mask-image: none; mask-image: none; padding-right: 0; gap: 0;
 .rerr { display: block; background: var(--sun-soft); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
 .rerr b { color: var(--warn); }
 .rerr .btn { margin-top: 6px; }
+
+/* Orte, Ziele und Panoramastraßen bearbeiten */
+#edMap { height: min(340px, 38vh); border: 1px solid var(--line); border-radius: 10px; z-index: 0; }
+#edFields { display: grid; gap: 10px; }
+#edFields textarea { width: 100%; resize: vertical; }
+#edFields select { width: 100%; min-width: 0; }
+.edline { display: flex; gap: 10px; justify-content: space-between; align-items: center; min-height: 32px; }
+.gone { margin: 14px 0; }
+.gone > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.gone ul { list-style: none; margin: 0; padding: 0; }
+.gone li { display: flex; gap: 10px; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding: 6px 0; }
+.notice.low { position: fixed; left: 16px; right: 16px; bottom: 16px; z-index: 1090; margin: 0 auto; max-width: 720px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+@media (max-width: 860px) { .notice.low { bottom: calc(76px + env(safe-area-inset-bottom)); } }

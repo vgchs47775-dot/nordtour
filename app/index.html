@@ -126,6 +126,7 @@
     <p class="hint spaced">Tippe bei einer Straße auf ihre Priorität, nochmal tippen nimmt sie weg. Farben auf der Karte: <span id="panoLegend"></span> · Grün = ohne Priorität. Breit = eingeplant, gestrichelt = nicht eingeplant. Ändern unter <a href="#prioritaeten">Einstellungen → Prioritäten</a>.</p>
     <div class="chips" id="panoChips" role="group" aria-label="Nach Priorität filtern"></div>
     <div class="cards" id="panoCards"></div>
+    <details class="gone" id="gonePano" hidden></details>
   </section>
 
   <!-- ERLEBEN -->
@@ -134,8 +135,9 @@
       <h2 id="h-erleben">Sehenswürdigkeiten &amp; Wanderungen</h2>
       <div class="acts"><span class="toggle" id="sightSum"></span><label class="toggle"><input type="checkbox" id="sightOnly"> Nur Eingeplantes</label></div>
     </div>
-    <p class="lead">Ziele an deiner Strecke, nach Reisetag sortiert. Eingeplantes erscheint beim Tag mit Besuchszeit und Umweg. Alle Zeiten sind grobe Richtwerte.</p>
+    <p class="lead">Ziele an deiner Strecke, nach Reisetag sortiert. Alles lässt sich bearbeiten und löschen. Eingeplantes erscheint beim Tag mit Besuchszeit und Umweg. Alle Zeiten sind grobe Richtwerte.</p>
     <div id="sightList"></div>
+    <details class="gone" id="goneSights" hidden></details>
   </section>
 
   <!-- ORTE -->
@@ -145,6 +147,7 @@
     <div class="chips" id="ortChips" role="group" aria-label="Nach Priorität filtern"></div>
     <div class="chips" id="ortTypes" role="group" aria-label="Nach Art filtern"></div>
     <ul class="ortlist" id="ortList"></ul>
+    <details class="gone" id="goneOrte" hidden></details>
     <form class="add" id="addOrt" autocomplete="off">
       <div class="fields">
         <label class="lbl" for="oName">Eigener Ort<input type="text" id="oName" maxlength="60" placeholder="z. B. Henningsvær"></label>
@@ -353,6 +356,19 @@
   </form>
 </dialog>
 
+<dialog id="editDlg" class="gendlg" aria-labelledby="edTitle">
+  <div class="toolbar"><h2 id="edTitle">Bearbeiten</h2><button class="btn ghost mini" type="button" id="edClose">Abbrechen</button></div>
+  <form id="edForm" autocomplete="off">
+    <div id="edFields"></div>
+    <p class="hint" id="edHint"></p>
+    <div id="edMap" aria-label="Karte. Antippen setzt die Lage."></div>
+    <div class="edline"><span class="hint" id="edInfo" aria-live="polite"></span><button type="button" class="btn ghost mini" id="edPtUndo" hidden>Punkt zurück</button></div>
+    <div class="inline"><label class="lbl" for="edQuery"><span id="edSearchLbl"></span><input type="text" id="edQuery" maxlength="60" placeholder="z. B. Henningsvær"></label><button class="btn ghost" type="button" id="edSearch">Suchen</button></div>
+    <p class="formerr" id="edErr"></p>
+    <div class="acts"><button class="btn" type="submit" id="edSave">Speichern</button><button class="btn ghost" type="button" id="edReset" hidden>Original wiederherstellen</button><button class="btn danger" type="button" id="edDel">Löschen</button></div>
+  </form>
+</dialog>
+
 <dialog id="genDlg" class="gendlg" aria-labelledby="genTitle">
   <div class="toolbar"><h2 id="genTitle">✨ Route aus Prioritäten</h2><button class="btn ghost mini" type="button" id="genClose">Schließen</button></div>
   <form id="genForm">
@@ -407,6 +423,7 @@
 <script src="planer.js"></script>
 <script src="etappen.js"></script>
 <script src="panowege.js"></script>
+<script src="bearbeiten.js"></script>
 <script src="sky.js"></script>
 <script src="aurora.js"></script>
 <script src="journal.js"></script>

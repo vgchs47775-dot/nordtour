@@ -157,13 +157,14 @@ const lineNear0 = (L, q) => L.P.reduce((b, p, j) => { const km = hav(p, { lat: q
 
 /* ---------- Zusammenlegen ---------- */
 const isRestDay = (d, i, list) => { const p = i > 0 ? list[i - 1] : null; return !!(p && hasPos(p) && hasPos(d) && hav(p, d) < 0.05 && !(d.via || []).length); };
-function mergeNight(id) {
+// opt.quiet: ohne Rückfrage, und der Ort bleibt nicht als Stopp (Ort löschen, bearbeiten.js)
+function mergeNight(id, opt = {}) {
   const list = sortedDays(), i = list.findIndex(x => x.id === id), d = list[i], n = list[i + 1];
   if (!d || !n) return;
   if (journalUsed(id)) { notice(`Der Tag ${esc(fmtDate(d.date))} hat Tagebuch-Einträge. Lösche oder verschiebe sie zuerst, sonst wären sie nicht mehr zu sehen.`); return; }
   const rest = isRestDay(d, i, list), nextRest = isRestDay(n, i + 1, list);
-  const keep = hasPos(d) && !d.auto && !rest && !nextRest;
-  if (!confirm(rest || nextRest ? `Eine Nacht in ${nightBase(d.night)} weniger? Die folgenden Tage rücken einen Tag nach vorne.`
+  const keep = !opt.quiet && hasPos(d) && !d.auto && !rest && !nextRest;
+  if (!opt.quiet && !confirm(rest || nextRest ? `Eine Nacht in ${nightBase(d.night)} weniger? Die folgenden Tage rücken einen Tag nach vorne.`
     : `Nicht mehr in ${nightBase(d.night)} übernachten? Die Etappe geht dann direkt weiter bis ${nightBase(n.night)}${keep ? `, ${nightBase(d.night)} bleibt als Stopp` : ""}. Die folgenden Tage rücken einen Tag nach vorne.`)) return;
   undoSnap = JSON.stringify(state.days);
   const same = d.src && (n.id === d.src || n.src === d.src), panos = [...new Set([...dayPanoIds(d), ...dayPanoIds(n)])];

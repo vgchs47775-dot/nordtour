@@ -424,6 +424,7 @@ function notice(html, withUndo = false, extraHtml = "") {
   const n = $("#notice");
   n.innerHTML = `<span>${html}</span>${withUndo && undoSnap ? `<button class="btn ghost mini" type="button" id="btnUndo">Rückgängig</button>` : ""}${extraHtml}<button class="btn ghost mini" type="button" id="btnHide">Ausblenden</button>`;
   n.hidden = false;
+  n.classList.remove("low"); if (n.getBoundingClientRect().bottom < 60) n.classList.add("low");   // nach unten gescrollt: unten einblenden
   clearTimeout(noticeTimer);
   n.dataset.ms = extraHtml ? 0 : withUndo && undoSnap ? 20000 : 8000;
   if (+n.dataset.ms) noticeTimer = setTimeout(() => { n.hidden = true; }, +n.dataset.ms);

@@ -91,7 +91,7 @@ function allOrte() {
   // Orte, die nur in anderen gespeicherten Routen vorkommen
   for (const d of otherRouteDays()) {
     const away = (name, type, lat, lon) => {
-      const key = "o:" + ortSlug(name); if (byKey.has(key)) return;
+      const key = "o:" + ortSlug(name); if (byKey.has(key) || state.settings?.ort_weg?.[key]) return;   // gelöscht (bearbeiten.js)
       const n = { key, name: nightBase(name), type, lat, lon, days: [], idx: 999, away: true }; byKey.set(key, n); out.push(n);
     };
     for (const v of d.via || []) if (hasPos(v) && v.name && !v.wp && !v.key && !/ferjekai|fähranleger|hurtigrutenkai/i.test(v.name)) away(v.name, "stop", v.lat, v.lon);
@@ -135,7 +135,9 @@ function renderOrte() {
       ${prioButtons("ort", o.key, o.name)}
       <span class="acts"><button type="button" class="btn ghost mini" data-ortmap="${esc(o.key)}">Auf der Karte</button>
         <a class="btn go mini" href="https://www.google.com/maps/search/?api=1&query=${o.lat},${o.lon}" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>
-        ${o.type === "own" ? rmBtn("places", o.id, o.name) : ""}</span>
+        
+        <button type="button" class="btn ghost mini" data-edit-x="ort|${esc(o.key)}">Bearbeiten</button>
+        <button type="button" class="btn danger mini" data-del-x="ort|${esc(o.key)}">Löschen</button></span>
     </li>`;
   }).join("") : `<li class="empty">Keine Orte mit dieser Auswahl.</li>`;
   $("#nOrte").textContent = all.filter(o => ortPrio(o.key)).length;
@@ -169,7 +171,7 @@ function drawOrte() {
 function ortPopup(key) {
   const o = allOrte().find(x => x.key === key); if (!o) return "";
   return `<div class="pop" data-pop="ort|${esc(key)}"><b>${esc(o.name)}</b><span>${ORT_TYPES[o.type]}${ortWhen(o) ? " · " + esc(ortWhen(o)) : ""}</span>${prioButtons("ort", key, o.name)}
-    <div class="acts"><a class="btn ghost mini" href="#orte">Alle Orte</a></div></div>`;
+    <div class="acts"><a class="btn ghost mini" href="#orte">Alle Orte</a><button type="button" class="btn ghost mini" data-edit-x="ort|${esc(key)}">Bearbeiten</button></div></div>`;
 }
 function showOrtOnMap(key) {
   const o = allOrte().find(x => x.key === key); if (!o) return;
