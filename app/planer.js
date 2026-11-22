@@ -3,11 +3,12 @@
    so bleibt die Rundreise eine Rundreise und nichts springt quer durchs Land.
    Was hineinkommt, bestimmt die Regel der Stufe (einstellungen.js): immer/kurz = immer, umweg = wenn der (über
    Valhalla gemessene) Umweg klein genug ist und die Tage reichen, nie = nie. Danach Aufteilung in Tage nach Fahrzeit; liegt am Tagesende kein Ort,
-   wird ein Schlafplatz unterwegs gesetzt (d.auto). Wegpunkte von Panoramastraßen und der An-/Abreise: v.wp.
+   wird ein Schlafplatz unterwegs gesetzt (d.auto). Orte einer Stufe mit „Übernachtung in der Nähe“ (lvNight, n.near)
+   bekommen immer eine Nacht höchstens opt.near km entfernt (splitDays). Wegpunkte von Panoramastraßen und der An-/Abreise: v.wp.
    Wird nach varianten.js geladen. */
 "use strict";
 
-const GEN_DEFAULT = { drive: 6, days: null, access: true, unprio: false };
+const GEN_DEFAULT = { drive: 6, days: null, access: true, unprio: false, near: 25 };
 const GEN_MAX_DAY = 11;             // Fahrt + Aufenthalte je Tag, höchstens (h)
 const GEN_SPAN = 1200;              // Luftlinie je Valhalla-Anfrage (Server erlaubt 1500 km)
 let genCancel = false, genBusy = false, genOut = null;
@@ -120,35 +121,87 @@ function pointOnLeg(l, frac) {
   for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + hav({ lat: pts[i - 1][0], lon: pts[i - 1][1] }, { lat: pts[i][0], lon: pts[i][1] }));
   const total = cum[cum.length - 1]; let i = cum.findIndex(c => c >= total * frac); if (i < 0) i = pts.length - 1;
   for (const [a, b] of l.ferries) if (i >= a && i <= b) i = Math.max(0, a - 1);
-  return { lat: +pts[i][0].toFixed(4), lon: +pts[i][1].toFixed(4), frac: total ? cum[i] / total : frac };
+  return { lat: +pts[i][0].toFixed(4), lon: +pts[i][1].toFixed(4), frac: total ? cum[i] / total : frac, crossed: l.ferries.filter(f => f[1] <= i).length };
 }
-function splitDays(seq, opt) {
-  const days = [], place = n => !n.wp;                 // an reinen Wegpunkten wird nicht übernachtet
-  const fresh = () => ({ via: [], drive: 0, stay: 0, km: 0 });
+const isPlace = n => !n.wp;                            // an reinen Wegpunkten wird nicht übernachtet
+// Kilometer vom Start je Punkt; eine Fähre zählt zusätzlich, damit „in der Nähe“ möglichst nicht über eine Überfahrt geht
+const FERRY_NEAR = 15;
+function seqKm(seq) {
+  const cum = [0];
+  for (let i = 1; i < seq.length; i++) { const l = leg(seq[i - 1], seq[i]); cum.push(cum[i - 1] + l.km + FERRY_NEAR * l.ferries.length); }
+  return cum;
+}
+// Abschnitt von Punkt „from“ bis „to“ in Tage teilen; am Ende („to“) wird immer übernachtet. at = Kilometer der Nacht
+function splitPart(seq, from, to, drive, cum) {
+  const days = [], fresh = () => ({ via: [], drive: 0, stay: 0, km: 0 });
   let cur = fresh();
-  const close = night => { days.push({ ...cur, night }); cur = fresh(); };
-  const sleepAtLast = () => { const n = cur.via.pop(); cur.stay -= n.stay || 0; close(n); };
-  for (let i = 1; i < seq.length; i++) {
+  const close = (night, at) => { days.push({ ...cur, night, at }); cur = fresh(); };
+  const sleepAtLast = () => { const n = cur.via.pop(); cur.stay -= n.stay || 0; close(n, cum[seq.indexOf(n)]); };
+  for (let i = from + 1; i <= to; i++) {
     const a = seq[i - 1], b = seq[i], l = leg(a, b);
     let left = l.h, frac = 0;
-    while (cur.drive + left > opt.drive * 1.12) {
+    while (cur.drive + left > drive * 1.12) {
       const last = cur.via[cur.via.length - 1];
-      if (frac === 0 && last && place(last) && cur.drive >= opt.drive * 0.55) { sleepAtLast(); continue; }
-      const p = pointOnLeg(l, Math.min(1, frac + Math.max(0.05, opt.drive - cur.drive) / l.h));
+      if (frac === 0 && last && isPlace(last) && cur.drive >= drive * 0.55) { sleepAtLast(); continue; }
+      const p = pointOnLeg(l, Math.min(1, frac + Math.max(0.05, drive - cur.drive) / l.h));
+      const at = cum[i - 1] + p.frac * l.km + FERRY_NEAR * p.crossed;
       if (p.frac <= frac + 0.01) {                     // Fähre gleich zu Beginn: erst morgen übersetzen
         if (cur.drive < 0.2) break;                    // sonst käme man nie weiter
-        if (last && place(last)) { sleepAtLast(); continue; }
-        close({ ...p, auto: true }); continue;
+        if (last && isPlace(last)) { sleepAtLast(); continue; }
+        close({ lat: p.lat, lon: p.lon, auto: true }, at); continue;
       }
       cur.drive += (p.frac - frac) * l.h; cur.km += (p.frac - frac) * l.km; left -= (p.frac - frac) * l.h; frac = p.frac;
-      close({ ...p, auto: true });
+      close({ lat: p.lat, lon: p.lon, auto: true }, at);
     }
     cur.drive += left; cur.km += l.km * (1 - frac);
-    if (i === seq.length - 1) { close(b); break; }
+    if (i === to) { close(b, cum[i]); break; }
     cur.via.push(b); cur.stay += b.stay || 0;
-    if (place(b) && (cur.drive + cur.stay >= GEN_MAX_DAY || cur.via.length >= 15)) sleepAtLast();
+    if (isPlace(b) && (cur.drive + cur.stay >= GEN_MAX_DAY || cur.via.length >= 15)) sleepAtLast();
   }
   return days;
+}
+// Entfernung (entlang der Strecke) von Kilometer „km“ zur nächsten Nacht; 0 = Start zu Hause
+const nightDist = (days, km) => Math.min(km, ...days.map(d => Math.abs(d.at - km)));
+/* Tage bilden. Punkte mit „near“ (Stufe mit „Übernachtung in der Nähe“) brauchen eine Nacht höchstens opt.near km entfernt.
+   Wo die Aufteilung nach Fahrzeit das nicht ergibt, wird an einem Ort in der Nähe eine feste Nacht gesetzt (am liebsten dort,
+   wo sie für mehrere solche Punkte reicht); danach fallen überflüssige feste Nächte wieder weg. */
+function splitDays(seq, opt) {
+  const cum = seqKm(seq), end = seq.length - 1, R = opt.near, memo = new Map();
+  const must = seq.map((n, i) => i).filter(i => i > 0 && i < end && seq[i].near);
+  if (!must.length) return splitPart(seq, 0, end, opt.drive, cum);
+  // Abschnitt zwischen zwei festen Nächten: so wenige Tage wie möglich, die Fahrzeit darin gleichmäßig verteilt
+  const part = (a, b) => {
+    const k = a + "-" + b; if (memo.has(k)) return memo.get(k);
+    let out = splitPart(seq, a, b, opt.drive, cum); const n = out.length, total = out.reduce((s, d) => s + d.drive, 0);
+    if (n > 1) for (let lim = Math.max(1, total / n); lim < opt.drive; lim += 0.2) { const t = splitPart(seq, a, b, lim, cum); if (t.length <= n) { out = t; break; } }
+    memo.set(k, out); return out;
+  };
+  const build = brk => { const p = [0, ...[...brk].sort((x, y) => x - y), end], out = []; for (let k = 1; k < p.length; k++) out.push(...part(p[k - 1], p[k])); return out; };
+  const open = days => must.filter(m => nightDist(days, cum[m]) > R);
+  const around = m => seq.map((n, i) => i).filter(i => i > 0 && i < end && isPlace(seq[i]) && Math.abs(cum[i] - cum[m]) <= R);
+  const sight = i => seq[i].key?.startsWith("s:") ? 5 : 0;   // lieber im Ort schlafen als am Ziel (z. B. Berg), wenn es kaum weiter ist
+  const score = (days, brk) => open(days).length * 1e4 + days.length * 100 + must.reduce((s, m) => s + Math.min(1, nightDist(days, cum[m]) / R), 0) + [...brk].reduce((s, i) => s + sight(i) / R, 0);
+  let brk = new Set(), days = build(brk);
+  for (let todo = open(days); todo.length; todo = open(days)) {
+    const c = around(todo[0]).map(i => ({ i, n: todo.filter(m => Math.abs(cum[m] - cum[i]) <= R).length, km: Math.abs(cum[i] - cum[todo[0]]) + sight(i) }));
+    c.sort((x, y) => y.n - x.n || x.km - y.km);
+    brk.add(c[0].i); days = build(brk);
+  }
+  for (let pass = 0; pass < 2; pass++) for (const b of [...brk]) {
+    // feste Nacht weglassen oder verschieben, wenn die Reise dadurch kürzer wird oder die Nächte näher liegen
+    for (const alt of [null, ...around(b)]) {
+      const t = new Set(brk); t.delete(b); if (alt != null) t.add(alt);
+      const d = build(t); if (score(d, t) < score(days, brk) - 1e-6) { brk = t; days = d; break; }
+    }
+  }
+  return days;
+}
+// Wo wird bei einem Ziel übernachtet? (Text für die Vorschau)
+function nightNote(item, seq, cum, days) {
+  const q = item.nodes[0], i = seq.findIndex(n => n.key === q.key) >= 0 ? seq.findIndex(n => n.key === q.key) : seq.findIndex(n => hav(n, q) < 0.3);
+  if (i < 0) return "";
+  const d = days.reduce((a, x) => Math.abs(x.at - cum[i]) < Math.abs(a.at - cum[i]) ? x : a), km = Math.abs(d.at - cum[i]);
+  return km < 0.5 ? "🌙 Übernachtung vor Ort" : `🌙 ${d.night.home ? "zu Hause" : d.night.name || "Schlafplatz unterwegs"}, ${num(km)} km entfernt`;
 }
 
 // Name für einen Schlafplatz: möglichst das nächste Dorf statt der Gemeinde
@@ -173,7 +226,7 @@ function genCandidates(opt) {
     const s = o.type === "sight" ? SIGHTS().find(x => x.id === o.id) : null, si = s ? base.days.findIndex(d => d.id === s.day) : -1;
     const pos = basePos.get(o.key) ?? (si >= 0 ? trackPos(base.track, o, Math.max(0, si - 1), si + 1).pos : trackPos(base.track, o).pos);
     const stay = lv.rule === "kurz" ? lv.stay : s ? s.visit : lv.stay;
-    items.push({ kind: "ort", lv, rank: rank(lv), pos, end: pos, label: o.name, nodes: [{ name: o.name, lat: o.lat, lon: o.lon, key: o.key, stay }] });
+    items.push({ kind: "ort", lv, rank: rank(lv), pos, end: pos, label: o.name, nodes: [{ name: o.name, lat: o.lat, lon: o.lon, key: o.key, stay, ...(lvNight(lv) ? { near: true } : {}) }] });
   }
   for (const p of PANO()) {
     const lv = levelOf(panoPrio(p.id)); if (!lv) continue;
@@ -224,7 +277,7 @@ function buildSeq(items, start, end, track) {
   const seq = [{ ...start, pos: 0 }];
   for (const b of blocks) b.nodes.forEach((n, i) => {
     const prev = seq[seq.length - 1];
-    if (hav(prev, n) < 0.3) { if (!n.wp && prev.wp) seq[seq.length - 1] = { ...n, pos: b.pos }; return; }
+    if (hav(prev, n) < 0.3) { if (!n.wp && prev.wp) seq[seq.length - 1] = { ...n, pos: b.pos }; else if (n.near) prev.near = true; return; }
     seq.push({ ...n, pos: i ? (b.span ?? b.pos) : b.pos });
   });
   seq.push({ ...end, pos: track.length - 1 });
@@ -294,7 +347,9 @@ async function generateRoute(opt, progress) {
     progress(`Schlafplätze unterwegs benennen (${i + 1} von ${autos.length}) …`);
     try { d.night.name = `bei ${await villageName(d.night.lat, d.night.lon)}`; } catch { d.night.name = "Schlafplatz unterwegs"; }
   }
-  return { days: toDays(days), raw: days, chosen: chosen.filter(x => x.kind !== "weg"), omitted, opt,
+  const cum = seqKm(seq), nights = chosen.filter(x => x.nodes[0].near);
+  for (const x of nights) x.why = nightNote(x, seq, cum, days);
+  return { days: toDays(days), raw: days, chosen: chosen.filter(x => x.kind !== "weg"), nights: nights.length, omitted, opt,
     skipped: [...allOrte().map(o => [o.name, ortPrio(o.key)]), ...PANO().map(p => [p.name, panoPrio(p.id)])].filter(x => prioLevel(x[1])?.rule === "nie").map(x => x[0]) };
 }
 // Planungsergebnis → Reisetage der App
@@ -317,11 +372,11 @@ function toDays(raw) {
 function genOptions() { return { ...GEN_DEFAULT, days: state.days.length || 24, ...(state.settings?.gen || {}) }; }
 function openGen() {
   const o = genOptions(), c = prioCounts(allOrte().map(x => ortPrio(x.key))), p = prioCounts(PANO().map(x => panoPrio(x.id)));
-  $("#gDrive").value = o.drive; $("#gDays").value = o.days;
+  $("#gDrive").value = o.drive; $("#gDays").value = o.days; $("#gNear").value = o.near; $("#gNearLbl").hidden = !prioLevels("ort").some(lvNight);
   $("#gAccess").checked = o.access; $("#gUnprio").checked = o.unprio;
   $("#genCounts").textContent = `${c.ohne || 0} Orte und ${p.ohne || 0} Panoramastraßen haben noch keine Priorität.`;
   $("#genLevels").innerHTML = prioLevels().map(l => `<div class="genlevel" data-genlevel="${esc(l.id)}" style="--pc:var(--p-${l.id});--pi:var(--pi-${l.id})">
-    <span class="nm"><span class="ppill">${esc(l.name)}</span><span class="nt">${[l.ort ? `Orte: ${c[l.id] || 0}` : "", l.pano ? `Panoramastraßen: ${p[l.id] || 0}` : ""].filter(Boolean).join(", ")} · ${RULES[l.rule]}</span></span>
+    <span class="nm"><span class="ppill">${esc(l.name)}</span><span class="nt">${[l.ort ? `Orte: ${c[l.id] || 0}` : "", l.pano ? `Panoramastraßen: ${p[l.id] || 0}` : ""].filter(Boolean).join(", ")} · ${RULES[l.rule]}${l.ort && lvNight(l) ? " · 🌙 mit Übernachtung in der Nähe" : ""}</span></span>
     ${l.rule === "nie" ? "" : `<label class="lbl">Zeit je Ort (h)<input type="number" name="stay" min="0" max="12" step="0.25" value="${l.stay}"></label>`}
     ${l.rule === "umweg" ? `<label class="lbl">Umweg max. (h)<input type="number" name="detour" min="0" max="10" step="0.25" value="${l.detour}"></label>` : ""}</div>`).join("");
   $("#genErr").textContent = ""; $("#genProg").textContent = ""; $("#genResult").innerHTML = ""; genOut = null;
@@ -334,7 +389,7 @@ function renderGen(g) {
   let n = 1; while (state.routeList.some(r => r.name === `Prioritäten ${n}`)) n++;
   $("#genResult").innerHTML = `<div class="genres">
     <div class="big"><div><b>${g.days.length}</b><span>Tage</span></div><div><b>${num(km)} km</b><span>Strecke</span></div><div><b>${num(h)} h</b><span>Fahrzeit</span></div></div>
-    ${over > 0 ? `<p class="genwarn">Die Route braucht ${over} Tag${over > 1 ? "e" : ""} mehr als erlaubt (${g.opt.days}). Ziele mit der Regel „immer“ lasse ich nicht weg. Erhöhe die Fahrzeit oder die Tage, oder stufe einzelne Ziele herunter.</p>` : over < 0 ? `<p class="hint">${-over} Tag${over < -1 ? "e bleiben" : " bleibt"} frei, z. B. für Ruhetage („+ Nacht“).</p>` : ""}
+    ${over > 0 ? `<p class="genwarn">Die Route braucht ${over} Tag${over > 1 ? "e" : ""} mehr als erlaubt (${g.opt.days}). Ziele mit der Regel „immer“ lasse ich nicht weg. ${g.nights ? `${g.nights === 1 ? "Ein Ort bekommt" : `${g.nights} Orte bekommen`} eine Übernachtung in der Nähe. ` : ""}Erhöhe die Fahrzeit, die Tage oder die Entfernung zur Übernachtung, oder stufe einzelne Ziele herunter.</p>` : over < 0 ? `<p class="hint">${-over} Tag${over < -1 ? "e bleiben" : " bleibt"} frei, z. B. für Ruhetage („+ Nacht“).</p>` : ""}
     ${[...prioLevels(), { id: "_ohne", name: "ohne Priorität" }].map(l => grp(esc(l.name), g.chosen.filter(x => x.lv.id === l.id))).join("")}
     ${grp("Weggelassen", g.omitted.map(x => ({ label: x.label, why: `${x.lv.name}, ${x.why}` })))}${grp("Nie einplanen", g.skipped.map(label => ({ label })))}
     <details open><summary>Tage</summary><ol>${g.days.map((d, i) => `<li>${fmtDate(d.date)}: ${esc(d.title)} <span class="hint">${num(g.raw[i].km)} km · ${fmtShort(g.raw[i].drive)}${d.via.filter(v => v.stay).length ? ` · ${d.via.filter(v => v.stay).map(v => esc(v.name)).join(", ")}` : ""}</span></li>`).join("")}</ol></details>
@@ -350,7 +405,7 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#genForm").addEventListener("submit", async e => {
     e.preventDefault(); if (genBusy) return;
     const v = id => parseFloat($(id).value), err = $("#genErr"); err.textContent = "";
-    const opt = { drive: v("#gDrive"), days: v("#gDays"), access: $("#gAccess").checked, unprio: $("#gUnprio").checked };
+    const opt = { drive: v("#gDrive"), days: v("#gDays"), near: v("#gNear"), access: $("#gAccess").checked, unprio: $("#gUnprio").checked };
     const inputs = [...document.querySelectorAll("#genLevels [data-genlevel] input")];
     if (Object.values(opt).some(x => typeof x === "number" && !isFinite(x)) || inputs.some(x => !isFinite(parseFloat(x.value)))) { err.textContent = "Bitte alle Felder ausfüllen."; return; }
     if (!navigator.onLine) { err.textContent = "Für die Berechnung brauchst du Internet."; return; }

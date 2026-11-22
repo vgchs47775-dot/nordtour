@@ -512,6 +512,7 @@ function renderDays() {
   $("#h-route").textContent = list.length ? `${list.length} Tage` : "Route";
   $("#days").innerHTML = list.length ? list.map((d, i) => dayHtml(d, i, list)).join("")
     : `<li class="empty">Noch keine Tage eingetragen.</li>`;
+  if (typeof renderNightGap === "function") renderNightGap();
   const last = list[list.length - 1];
   if (last && !$("#nDate").value) {
     const n = new Date(last.date + "T12:00:00"); n.setDate(n.getDate() + 1);

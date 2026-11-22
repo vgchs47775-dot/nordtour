@@ -47,7 +47,7 @@ function setPrio(kind, key, val) {
 // Nur neu zeichnen, was von Prioritäten abhängt (Routen bleiben unberührt); ein offenes Popup bleibt offen
 function redrawPrio() {
   const pop = document.querySelector(".leaflet-popup-content [data-pop]")?.dataset.pop, ll = map._popup?.getLatLng?.();
-  renderPano(); renderSights(); renderOrte(); drawMarkers(); drawExtras(); drawOrte();
+  renderPano(); renderSights(); renderOrte(); if (typeof renderNightGap === "function") renderNightGap(); drawMarkers(); drawExtras(); drawOrte();
   if (!pop) return;
   const [k, id] = [pop.slice(0, pop.indexOf("|")), pop.slice(pop.indexOf("|") + 1)];
   if (k === "pano" && ll) panoLines[id]?.openPopup(ll);
@@ -131,7 +131,7 @@ function renderOrte() {
   el.innerHTML = list.length ? list.map(o => {
     const p = ortPrio(o.key);
     return `<li class="ortrow"${p ? ` style="--pc:var(--p-${p})"` : ""}>
-      <span class="nm">${esc(o.name)}<span class="nt">${ORT_TYPES[o.type]}${o.sub ? ` · ${esc(o.sub)}` : ""}${ortWhen(o) ? ` · ${esc(ortWhen(o))}` : ""}</span></span>
+      <span class="nm">${esc(o.name)}<span class="nt">${ORT_TYPES[o.type]}${o.sub ? ` · ${esc(o.sub)}` : ""}${ortWhen(o) ? ` · ${esc(ortWhen(o))}` : ""}${typeof nightInfo === "function" ? nightInfo(o) : ""}</span></span>
       ${prioButtons("ort", o.key, o.name)}
       <span class="acts"><button type="button" class="btn ghost mini" data-ortmap="${esc(o.key)}">Auf der Karte</button>
         <a class="btn go mini" href="https://www.google.com/maps/search/?api=1&query=${o.lat},${o.lon}" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>

@@ -105,8 +105,10 @@ function splitStage(d, L, sel, dropId) {
   undoSnap = JSON.stringify(state.days);
   const vias = fixedVias(d), cutAt = sel.viaAt != null ? sel.viaAt : L.used[L.P[sel.j].leg + 1];
   // vias entspricht L.all[1 … n-1]
-  const before = vias.slice(0, cutAt - 1), after = vias.slice(sel.viaAt != null ? cutAt : cutAt - 1), stop = sel.viaAt != null ? vias[cutAt - 1] : null;
+  const before = vias.slice(0, cutAt - 1), after = vias.slice(sel.viaAt != null ? cutAt : cutAt - 1); let stop = sel.viaAt != null ? vias[cutAt - 1] : null;
   addLeft(d, vias, [before, after]);
+  for (const l of [before, after]) for (let k = l.length - 1; k >= 0; k--)   // derselbe Ort nicht zusätzlich als Stopp
+    if (!l[k].wp && !l[k].ferry && hav(l[k], sel) < 0.3) { const [v] = l.splice(k, 1); stop = stop || v; }
   const baked = vias.some(v => v.pv), from = i > 0 ? nightBase(list[i - 1].night) : firstName(d);
   const panoIds = dayPanoIds(d), mine = SIGHTS().filter(x => sightDayId(x) === d.id && (x.day === d.id || d.sights?.includes(x.id)));
   const first = L.P.slice(0, sel.j + 1), second = L.P.slice(sel.j);
@@ -191,6 +193,47 @@ function mergeNight(id) {
   notice(`Nacht in ${esc(nightBase(d.night))} aufgelöst, die folgenden Tage sind einen Tag nach vorne gerückt.${moves.length ? ` ${moves.length} Kostenposten ${moves.length === 1 ? "gehört" : "gehören"} jetzt zum Tag ${esc(nightBase(n.night))}.` : ""}`, true);
 }
 
+/* ---------- Orte, die eine Übernachtung in der Nähe brauchen (Stufe mit „night“, einstellungen.js) ---------- */
+const nearMax = () => genOptions().near;
+const needsNight = o => lvNight(prioLevel(ortPrio(o.key)));
+function nearestNight(o) { return sortedDays().filter(hasPos).reduce((a, d) => { const km = hav(o, d); return !a || km < a.km ? { km, d } : a; }, null); }
+const nightGaps = () => state?.days?.length ? allOrte().filter(needsNight).map(o => ({ o, n: nearestNight(o) })).filter(x => x.n && x.n.km > nearMax()) : [];
+function nightInfo(o) {                                // Zusatz im Reiter „Orte“
+  if (!needsNight(o)) return "";
+  const n = nearestNight(o); if (!n) return "";
+  return n.km > nearMax() ? ` · <b class="nogap">⚠ keine Übernachtung in der Nähe</b>` : ` · 🌙 ${n.km < 1 ? "Übernachtung vor Ort" : `${esc(nightBase(n.d.night))}, ${num(n.km)} km`}`;
+}
+function renderNightGap() {
+  const el = document.getElementById("nightGap"); if (!el || !state) return;
+  if (document.activeElement?.id === "ngNear") return;   // nicht unter dem Cursor neu zeichnen
+  const gaps = nightGaps(); el.hidden = !gaps.length; if (!gaps.length) { el.innerHTML = ""; return; }
+  el.innerHTML = `<summary>🌙 ${gaps.length === 1 ? "1 Ort hat" : `${gaps.length} Orte haben`} noch keine Übernachtung in der Nähe</summary>
+    <ul>${gaps.map(({ o, n }) => `<li><span class="nm"><i class="pdot" style="background:var(--p-${ortPrio(o.key)})"></i>${esc(o.name)}<span class="nt">${esc(prioName(ortPrio(o.key)))} · nächste Nacht: ${esc(nightBase(n.d.night))}, ${num(n.km)} km Luftlinie</span></span>
+      <span class="acts"><button type="button" class="btn mini" data-nightfor="${esc(o.key)}">Übernachtung einfügen</button><button type="button" class="btn ghost mini" data-ortmap="${esc(o.key)}">Auf der Karte</button></span></li>`).join("")}</ul>
+    <p class="hint"><label>Erlaubt sind höchstens <input type="number" id="ngNear" min="1" max="100" step="1" inputmode="numeric" value="${nearMax()}"> km</label> Luftlinie. Für welche Prioritäten das gilt, steht unter <a href="#prioritaeten">Einstellungen → Prioritäten</a>.</p>`;
+}
+// Passende Etappe suchen und das Fenster „Zwischenübernachtung“ mit diesem Ort öffnen
+function openNightFor(key) {
+  const o = allOrte().find(x => x.key === key); if (!o) return;
+  const list = sortedDays(); let best = null;
+  list.forEach((d, i) => {
+    if (!hasPos(d) || isRestDay(d, i, list)) return;
+    const pts = dayPoints(d, i, list), k = pts.findIndex((v, j) => j > 0 && j < pts.length - 1 && !v.wp && !v.ferry && hav(v, o) < 0.3);
+    const Ln = stageLine(d); if (Ln.P.length < 2 || Ln.km < 5) return;
+    const km = k > 0 ? -1 : lineNear(Ln, o).km;        // steht der Ort schon als Stopp in der Etappe, gewinnt sie
+    if (!best || km < best.km) best = { km, d, k };
+  });
+  if (!best) { notice("Keine passende Etappe gefunden."); return; }
+  if (best.km > 150) { notice(`„${esc(o.name)}“ liegt ${num(best.km)} km neben deiner Route. Plane den Ort zuerst als Stopp ein oder erstelle eine Route aus Prioritäten.`); return; }
+  openSplit(best.d.id, { lat: o.lat, lon: o.lon, name: o.name, key: o.key.startsWith("o:") ? undefined : o.key, viaAt: best.k > 0 ? best.k : undefined });
+}
+document.addEventListener("change", e => {
+  if (e.target.id !== "ngNear") return;
+  const v = Math.round(parseFloat(e.target.value)); if (!(v >= 1 && v <= 100)) { e.target.value = nearMax(); return; }
+  state.settings.gen = { ...(state.settings.gen || {}), near: v };
+  save(); e.target.blur(); renderNightGap(); renderOrte();
+});
+
 /* ---------- Dialog „Zwischenübernachtung“ ---------- */
 let sp = null, spMap = null, spLayer = null, spNameTimer = null;
 function openSplit(dayId, preset) {
@@ -269,6 +312,7 @@ function spName() {
   }, 700);
 }
 window.addEventListener("DOMContentLoaded", () => {
+  appReady.then(() => { renderNightGap(); renderOrte(); });
   const dlg = $("#splitDlg"), shut = () => { clearTimeout(spNameTimer); dlg.close(); };
   $("#spClose").addEventListener("click", shut);
   dlg.addEventListener("close", () => { if (!dlg.open) { clearTimeout(spNameTimer); sp = null; } });
@@ -312,6 +356,7 @@ window.addEventListener("DOMContentLoaded", () => {
 document.addEventListener("click", e => {
   const s = e.target.closest("[data-split]"); if (s) { openSplit(s.dataset.split); return; }
   const m = e.target.closest("[data-mergenight]"); if (m) { mergeNight(m.dataset.mergenight); return; }
+  const nf = e.target.closest("[data-nightfor]"); if (nf) { openNightFor(nf.dataset.nightfor); return; }
   const at = e.target.closest("[data-nightat]");
   if (at) { const [lat, lon] = at.dataset.ll.split(",").map(Number); map.closePopup(); openSplit(at.dataset.nightat, { lat, lon }); return; }
   const sv = e.target.closest("[data-nightstop]");

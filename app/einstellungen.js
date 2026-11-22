@@ -5,6 +5,7 @@
      Einträge der Listen merken sich den NAMEN – beim Umbenennen werden sie deshalb mitgeändert.
      sys = von der App gebraucht (z. B. automatische Spritkosten): umbenennen ja, löschen nein.
    - levels (Panoramastraßen + Orte): [{ id, name, color, rule, stay, detour, ort, pano }], zugeordnet wird die ID.
+     night = Orte dieser Stufe brauchen eine Übernachtung in der Nähe (fehlt das Feld, gilt es für „muss“), lesen über lvNight()
      rule: immer | kurz (immer, aber nur kurzer Stopp) | umweg (wenn der Umweg klein genug ist) | nie
    Reihenfolge = Wichtigkeit. Wird VOR lists.js geladen (nur Funktionen, gezeichnet wird über renderLists()). */
 "use strict";
@@ -24,7 +25,7 @@ const RULES = { immer: "immer einplanen", kurz: "immer, aber nur kurzer Stopp", 
 function defaultLevels() {
   const g = state?.settings?.gen || {};                // früher eingestellte Zeiten aus „Route aus Prioritäten“ übernehmen
   return [
-    { id: "muss", name: "Muss", color: "#d32f2f", rule: "immer", stay: g.muss ?? 2, detour: 1.5, ort: true, pano: true },
+    { id: "muss", name: "Muss", color: "#d32f2f", rule: "immer", stay: g.muss ?? 2, detour: 1.5, ort: true, pano: true, night: true },
     { id: "stop", name: "Kleiner Stop reicht", color: "#f57c00", rule: "kurz", stay: g.stop ?? 0.5, detour: 1.5, ort: true, pano: false },
     { id: "nice", name: "nice-to-have", color: "#f2c200", rule: "umweg", stay: g.stayNice ?? 1, detour: g.nice ?? 1.5, ort: true, pano: true },
     { id: "egal", name: "nicht unbedingt", color: "#8d5a2b", rule: "nie", stay: 1, detour: 1.5, ort: true, pano: true }
@@ -50,6 +51,7 @@ const costSys = key => sysCat("costCats", key);
 const listPrioRank = name => { const i = listPrios().findIndex(p => p.name === name); return i < 0 ? 999 : i; };
 const prioLevels = kind => { const l = cfgList("levels"); return kind ? l.filter(x => x[kind]) : l; };
 const prioLevel = id => cfgList("levels").find(l => l.id === id);
+const lvNight = l => !!l && l.rule !== "nie" && (l.night ?? l.id === "muss");   // Übernachtung in der Nähe nötig?
 const prioName = id => prioLevel(id)?.name || "";
 
 /* ---------- Farben ---------- */
@@ -143,7 +145,8 @@ function cfgRow(k, it, i, n) {
       ${it.rule === "nie" ? "" : `<label class="lbl">Zeit je Ort (h)<input type="number" data-cf="stay" min="0" max="12" step="0.25" inputmode="decimal" value="${it.stay}"></label>`}
       ${it.rule === "umweg" ? `<label class="lbl">Umweg höchstens (h)<input type="number" data-cf="detour" min="0" max="10" step="0.25" inputmode="decimal" value="${it.detour}"></label>` : ""}
       <span class="cfgfor"><label class="toggle"><input type="checkbox" data-cf="ort"${it.ort ? " checked" : ""}> Orte</label>
-      <label class="toggle"><input type="checkbox" data-cf="pano"${it.pano ? " checked" : ""}> Panoramastraßen</label></span></div>`;
+      <label class="toggle"><input type="checkbox" data-cf="pano"${it.pano ? " checked" : ""}> Panoramastraßen</label></span>
+      ${it.ort && it.rule !== "nie" ? `<label class="toggle cfgnight"><input type="checkbox" data-cf="night"${lvNight(it) ? " checked" : ""}> 🌙 Orte brauchen eine Übernachtung in der Nähe</label>` : ""}</div>`;
   if (cfgDel === `${k}|${it.id}`) {
     const none = k === "todoCats" || k === "listPrios" || k === "levels";
     const pick = cfgList(k).filter(x => x.id !== it.id), dflt = pick.find(x => x.sys === "Sonstiges");

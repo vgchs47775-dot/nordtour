@@ -37,8 +37,8 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `theme.js` (im `<head>`) | Hell/Dunkel/Auto; CSS nur über `:root[data-theme="dark"]`, in JS `isDark()` und Ereignis `themechange` |
 | `prio.js` | Prioritäten für Panoramastraßen und Orte, Kartenfarben |
 | `varianten.js` | mehrere Routen (`state.routeList`, `state.routeId`); gewählte Route liegt in `state.days`, nur andere haben `data` |
-| `planer.js` | Route aus Prioritäten; Kennzeichen an Punkten: `wp` (Wegpunkt), `anchor` (An-/Abreise), `key` (Ziel/eigener Ort), an Tagen `auto` (Schlafplatz unterwegs), `panos` |
-| `etappen.js` | Etappe teilen (Zwischenübernachtung) und Nacht auflösen; Felder `src`, `sights`, `stop`, `split` an Tagen, `pv` an Punkten (Erklärung im Dateikopf) |
+| `planer.js` | Route aus Prioritäten; Kennzeichen an Punkten: `wp` (Wegpunkt), `anchor` (An-/Abreise), `key` (Ziel/eigener Ort), an Tagen `auto` (Schlafplatz unterwegs), `panos`; Orte einer Stufe mit `lvNight()` (Vorgabe: Muss) bekommen immer eine Nacht höchstens `settings.gen.near` km entfernt |
+| `etappen.js` | Etappe teilen (Zwischenübernachtung) und Nacht auflösen; Felder `src`, `sights`, `stop`, `split` an Tagen, `pv` an Punkten (Erklärung im Dateikopf); Hinweis `#nightGap` auf Orte ohne Übernachtung in der Nähe |
 | `sky.js`, `aurora.js` | Nachthimmel, Kp-Prognose, Polarlicht-Karte (NOAA) |
 | `journal.js` | Tagebuch; Fotos im privaten Supabase-Bucket `tagebuch`, Warteschlange in IndexedDB |
 | `sync.js`, `cache.js`, `backup.js` | Cloud-Abgleich (`trips`), geteilter Zwischenspeicher (`route_cache`), Sicherungen (`trip_backups`) |

@@ -101,6 +101,7 @@
           <button class="btn danger mini" type="button" id="btnRouteDel" hidden>Löschen</button>
         </div>
       </div>
+      <details class="nightgap" id="nightGap" hidden></details>
       <ol class="days" id="days"></ol>
       <form class="add" id="addDay" autocomplete="off">
         <div class="fields">
@@ -358,6 +359,7 @@
     <div class="three">
       <label class="lbl" for="gDrive">Fahrzeit pro Tag, max. (h)<input type="number" id="gDrive" min="2" max="12" step="0.5"></label>
       <label class="lbl" for="gDays">Reisetage, höchstens<input type="number" id="gDays" min="2" max="90" step="1"></label>
+      <label class="lbl" for="gNear" id="gNearLbl">🌙 Übernachtung, max. entfernt (km)<input type="number" id="gNear" min="1" max="100" step="1"></label>
     </div>
     <div id="genLevels" class="genlevels"></div>
     <p class="hint">Regeln, Namen und Farben änderst du unter <a href="#prioritaeten" id="genCfg">Einstellungen → Prioritäten</a>.</p>

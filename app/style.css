@@ -553,3 +553,15 @@ nav.tabs { -webkit-mask-image: none; mask-image: none; padding-right: 0; gap: 0;
 .spres { display: grid; gap: 4px; background: var(--bg); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
 .spres i { font-style: normal; }
 .spres .long { color: var(--warn); font-weight: 600; }
+
+/* Orte ohne Übernachtung in der Nähe */
+.nightgap { background: var(--sun-soft); border-radius: 10px; padding: 4px 12px; margin: 0 0 12px; }
+.nightgap > summary { cursor: pointer; font-weight: 600; color: var(--warn); padding: 10px 0; }
+.nightgap ul { list-style: none; margin: 0; padding: 0; }
+.nightgap li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 8px 0; border-top: 1px solid var(--line); }
+.nightgap .nm { flex: 1 1 200px; min-width: 0; }
+.nightgap .nt { display: block; }
+.nightgap input { width: 72px; display: inline-block; }
+.nogap { color: var(--warn); }
+.cfgnight { grid-column: 1 / -1; flex-basis: 100%; }
+.nightgap .pdot { margin-right: 6px; }
