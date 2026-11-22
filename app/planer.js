@@ -49,13 +49,8 @@ function trackPos(track, p, from = -1, to = 1e9) {
 function panoNodes(p, base) {
   const ds = p.days.map(id => base.days.findIndex(d => d.id === id)).filter(i => i >= 0);
   const lo = ds.length ? Math.min(...ds) : -1, hi = ds.length ? Math.max(...ds) : 1e9;
-  let pts;
-  if (p.geom.length < 20) pts = p.days.flatMap(id => EXTRAS.variants?.[id]?.[p.id] || []).map(v => [v.lat, v.lon]);   // zu grobe Linie → geprüfte Wegpunkte
-  if (!pts?.length) {
-    const g = p.geom, n = Math.max(0, Math.min(4, Math.round(p.km / 45) - 1));
-    pts = Array.from({ length: n + 2 }, (_, i) => g[Math.round(i * (g.length - 1) / (n + 1))]);
-  }
-  const nodes = pts.map(q => ({ name: `${p.name} (Wegpunkt)`, lat: q[0], lon: q[1], wp: true, pano: p.id }));
+  const pts = panoWay(p);                              // geprüfte Wegpunkte, damit die Straße ganz gefahren wird (panowege.js)
+  const nodes = pts.map(q => ({ name: panoWp(p), lat: q[0], lon: q[1], wp: true, pano: p.id }));
   const a = trackPos(base.track, nodes[0], lo, hi), b = trackPos(base.track, nodes[nodes.length - 1], lo, hi);
   if (b.pos < a.pos) nodes.reverse();
   return { nodes, pos: Math.min(a.pos, b.pos), end: Math.max(a.pos, b.pos) };
@@ -156,7 +151,7 @@ function splitPart(seq, from, to, drive, cum) {
     cur.drive += left; cur.km += l.km * (1 - frac);
     if (i === to) { close(b, cum[i]); break; }
     cur.via.push(b); cur.stay += b.stay || 0;
-    if (isPlace(b) && (cur.drive + cur.stay >= GEN_MAX_DAY || cur.via.length >= 15)) sleepAtLast();
+    if (isPlace(b) && (cur.drive + cur.stay >= GEN_MAX_DAY || cur.via.filter(isPlace).length >= 15)) sleepAtLast();
   }
   return days;
 }
@@ -267,12 +262,15 @@ function buildSeq(items, start, end, track) {
     blocks.push({ pos: p.pos, nodes: list.map(e => e.node), span: p.end });
   }
   blocks.sort((a, b) => a.pos - b.pos);
-  // kleine Verbesserung: benachbarte Einzelorte tauschen, wenn das deutlich kürzer ist
+  // kleine Verbesserung: benachbarte Orte/Panoramastraßen tauschen, wenn das deutlich kürzer ist (sonst führe man z. B. erst an
+  // einer Straße vorbei und danach zurück). Straßen zählen in ihrer günstigeren Richtung, die legt orient() später fest.
+  const ways = b => b.nodes.length > 1 ? [[b.nodes[0], b.nodes.at(-1)], [b.nodes.at(-1), b.nodes[0]]] : [[b.nodes[0], b.nodes[0]]];
+  const air = (pv, x, y, nx) => Math.min(...ways(x).flatMap(p => ways(y).map(q => hav(pv, p[0]) + hav(p[1], q[0]) + hav(q[1], nx))));
   for (let pass = 0; pass < 3; pass++) for (let i = 0; i < blocks.length - 1; i++) {
     const a = blocks[i], b = blocks[i + 1];
-    if (a.nodes.length > 1 || b.nodes.length > 1 || a.nodes[0].anchor || b.nodes[0].anchor) continue;
-    const pv = i ? blocks[i - 1].nodes.at(-1) : start, nx = blocks[i + 2]?.nodes[0] || end, A = a.nodes[0], B = b.nodes[0];
-    if (hav(pv, B) + hav(A, nx) + 15 < hav(pv, A) + hav(B, nx)) [blocks[i], blocks[i + 1]] = [b, a];
+    if (a.nodes[0].anchor || b.nodes[0].anchor) continue;
+    const pv = i ? blocks[i - 1].nodes.at(-1) : start, nx = blocks[i + 2]?.nodes[0] || end, margin = a.nodes.length > 1 || b.nodes.length > 1 ? 30 : 15;
+    if (air(pv, b, a, nx) + margin < air(pv, a, b, nx)) [blocks[i], blocks[i + 1]] = [b, a];
   }
   const seq = [{ ...start, pos: 0 }];
   for (const b of blocks) b.nodes.forEach((n, i) => {
@@ -349,6 +347,11 @@ async function generateRoute(opt, progress) {
   }
   const cum = seqKm(seq), nights = chosen.filter(x => x.nodes[0].near);
   for (const x of nights) x.why = nightNote(x, seq, cum, days);
+  const panoItems = chosen.filter(x => x.kind === "pano");
+  if (panoItems.length) {
+    const cells = [lineCells(seq.slice(1).map((n, i) => decodePolyline(leg(seq[i], n).shape)))];
+    for (const x of panoItems) x.why = `${pct(coverOf(x.pano, cells))} der Strecke`;
+  }
   return { days: toDays(days), raw: days, chosen: chosen.filter(x => x.kind !== "weg"), nights: nights.length, omitted, opt,
     skipped: [...allOrte().map(o => [o.name, ortPrio(o.key)]), ...PANO().map(p => [p.name, panoPrio(p.id)])].filter(x => prioLevel(x[1])?.rule === "nie").map(x => x[0]) };
 }
@@ -359,7 +362,7 @@ function toDays(raw) {
     const n = r.night, last = i === raw.length - 1, name = last ? "zu Hause" : n.name;
     const panos = [...new Set([...r.via, n].map(v => v.pano).filter(Boolean))];
     const d = { id: uid(), order: i, date: addDays(t0, i), title: `${prev} → ${last ? nightBase(home().name) : name}`, night: name, lat: n.lat, lon: n.lon, ferries: 0,
-      via: r.via.map(v => ({ name: v.name, lat: v.lat, lon: v.lon, ...(v.stay > 0 && !v.wp ? { stay: Math.round(v.stay * 60) } : {}), ...(v.ferry ? { ferry: true } : {}), ...(v.wp ? { wp: true } : {}), ...(v.anchor ? { anchor: true } : {}), ...(v.key && !v.key.startsWith("o:") ? { key: v.key } : {}) })) };
+      via: r.via.map(v => ({ name: v.name, lat: v.lat, lon: v.lon, ...(v.stay > 0 && !v.wp ? { stay: Math.round(v.stay * 60) } : {}), ...(v.ferry ? { ferry: true } : {}), ...(v.wp ? { wp: true } : {}), ...(v.pano ? { pano: v.pano } : {}), ...(v.anchor ? { anchor: true } : {}), ...(v.key && !v.key.startsWith("o:") ? { key: v.key } : {}) })) };
     if (panos.length) d.panos = panos;
     if (n.auto) { d.auto = true; d.sub = "Schlafplatz unterwegs – mit park4night in der Nähe suchen"; }
     else if (!last && n.stay > 0) d.todo = `${n.name}: ca. ${fmtShort(n.stay)} einplanen`;

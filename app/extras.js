@@ -26,14 +26,12 @@ function togglePlanned(kind, id) {
   const set = new Set(state.settings[key] || []);
   set.has(id) ? set.delete(id) : set.add(id);
   state.settings[key] = [...set];
+  if (kind === "pano" && !set.has(id)) removePano(id);
   save(); refresh();
-  const p = kind === "pano" && PANO().find(x => x.id === id);
-  if (p && state.days.some(d => d.split && p.days.includes(d.id))) {
-    notice("Diese Etappe ist durch eine Zwischenübernachtung geteilt: Einplanen ändert die Strecke hier nicht. Löse die Nacht auf, plane die Straße ein und teile die Etappe danach neu.");
-    return;
-  }
-  if (p && !state.days.some(d => p.days.includes(d.id)))
-    notice("Diese Route wurde aus Prioritäten erstellt: Einplanen ändert hier die Strecke nicht. Setze eine Priorität und erstelle die Route neu.");
+  const p = kind === "pano" && set.has(id) && PANO().find(x => x.id === id);
+  // Hat kein Reisetag dieser Route eine fertige Variante, werden die Wegpunkte fest eingebaut (panowege.js)
+  if (p && !state.days.some(d => !d.split && EXTRAS.variants?.[d.id]?.[id]) && !(panoShare(p) >= 0.9) && completePano(id) != null)
+    notice(`🏞 ${esc(p.name)} ist jetzt ganz in der Route. Einzelne Tage können länger werden.`, true);
 }
 
 /* ================= Panoramastraßen → Wegpunkte ================= */
@@ -168,7 +166,7 @@ function renderPano() {
       ${gallery("pano:" + p.id)}
       <h3>${esc(p.name)}</h3>
       <span class="meta">${esc(p.land)} · ca. ${num(p.km)} km · ${esc(panoWhen(p))}</span>
-      <span class="meta delta">${esc(panoExtraText(p))}</span>
+      <span class="meta delta">${esc(panoExtraText(p))}${on && typeof panoShare === "function" && panoShare(p) != null ? ` · wird zu ${pct(panoShare(p))} gefahren` : ""}</span>
       <p>${esc(p.desc)}</p>
       <span class="fit">${esc(p.fit)}</span>
       ${prioButtons("pano", p.id, p.name)}

@@ -23,7 +23,7 @@ klassische Skripte in `app/`, die sich den globalen Gültigkeitsbereich teilen.
 
 ## Aufbau
 Ladereihenfolge (siehe Ende von `app/index.html`):
-`config → extras → app → stops → osm → toll → ferrycost → ferries → einstellungen → lists → prio → varianten → planer → etappen → sky → aurora → journal → sync → cache → backup → pwa`
+`config → extras → app → stops → osm → toll → ferrycost → ferries → einstellungen → lists → prio → varianten → planer → etappen → panowege → sky → aurora → journal → sync → cache → backup → pwa`
 
 | Datei | Aufgabe |
 |---|---|
@@ -39,6 +39,7 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `varianten.js` | mehrere Routen (`state.routeList`, `state.routeId`); gewählte Route liegt in `state.days`, nur andere haben `data` |
 | `planer.js` | Route aus Prioritäten; Kennzeichen an Punkten: `wp` (Wegpunkt), `anchor` (An-/Abreise), `key` (Ziel/eigener Ort), an Tagen `auto` (Schlafplatz unterwegs), `panos`; Orte einer Stufe mit `lvNight()` (Vorgabe: Muss) bekommen immer eine Nacht höchstens `settings.gen.near` km entfernt |
 | `etappen.js` | Etappe teilen (Zwischenübernachtung) und Nacht auflösen; Felder `src`, `sights`, `stop`, `split` an Tagen, `pv` an Punkten (Erklärung im Dateikopf); Hinweis `#nightGap` auf Orte ohne Übernachtung in der Nähe |
+| `panowege.js` | eingeplante Panoramastraßen ganz fahren: Wegpunkte `way` (extras.json), Anteil `panoShare()`, Hinweis `#panoGap`, Einbau in bestehende Routen; `pano` an Punkten |
 | `sky.js`, `aurora.js` | Nachthimmel, Kp-Prognose, Polarlicht-Karte (NOAA) |
 | `journal.js` | Tagebuch; Fotos im privaten Supabase-Bucket `tagebuch`, Warteschlange in IndexedDB |
 | `sync.js`, `cache.js`, `backup.js` | Cloud-Abgleich (`trips`), geteilter Zwischenspeicher (`route_cache`), Sicherungen (`trip_backups`) |
@@ -65,6 +66,7 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 - Nie neu zeichnen, ohne Cursor und Eingaben in offenen Feldern zu erhalten.
 - Ziehen und Verschieben nur in ausdrücklich eingeschalteten Modi („Reihenfolge ändern“, „Karte bearbeiten“).
 - Routing: Wegpunkte mit `search_filter.exclude_ferry`, sonst rasten Punkte am Wasser auf Fährlinien ein.
+- Der Routing-Server nimmt höchstens 10 Punkte je Anfrage (`computeRoute` teilt auf).
 - Routing-Anfragen nur über `askRouter()` (wiederholt Störungen; `e.perm` = Strecke selbst nicht berechenbar, Grund in `routeErr`).
 - Freiwillige Dienste schonen (Valhalla, Nominatim höchstens 1 Anfrage/s, Overpass, OSM-Kacheln): Ergebnisse speichern,
   keine Massenabfragen, keine Kartenkacheln vorab laden.

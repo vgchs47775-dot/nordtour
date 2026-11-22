@@ -170,9 +170,11 @@ async function computeRoute(pts, opt) {
   let run = [pts[0]];
   const flush = async () => {
     if (run.length < 2) return;
-    const r = await routeCar(run, opt); res.km += r.km; res.h += r.h; res.ferries.push(...r.ferries);
-    for (const enc of r.encs) res.parts.push({ ferry: false, enc });
-    await sleep(350);
+    for (let k = 0; k < run.length - 1; k += 9) {     // der Server nimmt höchstens 10 Punkte je Anfrage
+      const r = await routeCar(run.slice(k, k + 10), opt); res.km += r.km; res.h += r.h; res.ferries.push(...r.ferries);
+      for (const enc of r.encs) res.parts.push({ ferry: false, enc });
+      await sleep(350);
+    }
   };
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1], b = pts[i];
@@ -252,6 +254,7 @@ async function ensureRoutes() {
     renderDay(d.id); drawRoutes(); updateStats();
   }
   drawRoutes(); updateStats(); planRetry();
+  if (typeof renderPanoGap === "function") { renderPanoGap(); renderPano(); }   // wie viel der Panoramastraßen gefahren wird
   if (typeof renderCostTop === "function" && state.costs) renderCostTop();   // Spritkosten hängen an den km
   if (ferryNews.length) { notice("⛴ " + ferryNews.join(" · ")); ferryNews = []; }
   if (typeof ensureOsm === "function") ensureOsm();                          // Tankstellen & Trinkwasser
@@ -535,7 +538,7 @@ function dayHtml(d, idx, list) {
 // Zwischenziele als Liste: Name (mit Suche), Aufenthalt, „ab hier Fähre“, sortieren, löschen
 function viaRow(v = {}) {
   const has = typeof v.lat === "number";
-  return `<div class="viarow" data-lat="${has ? v.lat : ""}" data-lon="${has ? v.lon : ""}" data-orig="${esc(v.name || "")}" data-extra="${esc(JSON.stringify({ wp: v.wp, pv: v.pv, anchor: v.anchor, key: v.key }))}">
+  return `<div class="viarow" data-lat="${has ? v.lat : ""}" data-lon="${has ? v.lon : ""}" data-orig="${esc(v.name || "")}" data-extra="${esc(JSON.stringify({ wp: v.wp, pv: v.pv, pano: v.pano, anchor: v.anchor, key: v.key }))}">
     <span class="vmain"><input type="text" class="vname" maxlength="60" value="${esc(v.name || "")}" placeholder="Ort, z. B. Egersund" aria-label="Name des Zwischenziels">
       <button type="button" class="btn ghost mini" data-vsearch title="Ort suchen">Suchen</button></span>
     <span class="vopts">
@@ -578,6 +581,7 @@ function renderDays() {
   $("#days").innerHTML = list.length ? list.map((d, i) => dayHtml(d, i, list)).join("")
     : `<li class="empty">Noch keine Tage eingetragen.</li>`;
   if (typeof renderNightGap === "function") renderNightGap();
+  if (typeof renderPanoGap === "function") renderPanoGap();
   const last = list[list.length - 1];
   if (last && !$("#nDate").value) {
     const n = new Date(last.date + "T12:00:00"); n.setDate(n.getDate() + 1);
