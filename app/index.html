@@ -54,12 +54,17 @@
       <a href="#packen" data-view="packen">Packliste <span class="n" id="nPack">0</span></a>
       <a href="#kaufen" data-view="kaufen">Kaufen <span class="n" id="nBuy">0</span></a>
     </div>
+    <div class="tgroup" data-group="cfg"><span class="glabel">Einstellungen</span>
+      <a href="#kategorien" data-view="kategorien">Kategorien</a>
+      <a href="#prioritaeten" data-view="prioritaeten">Prioritäten</a>
+    </div>
   </nav>
   <!-- iPad/Handy: Gruppen als Leiste am unteren Rand -->
   <nav class="gbar" aria-label="Bereichsgruppen">
     <button type="button" data-gbar="plan"><span aria-hidden="true">🗺</span>Planen</button>
     <button type="button" data-gbar="trip"><span aria-hidden="true">🌌</span>Unterwegs</button>
     <button type="button" data-gbar="org"><span aria-hidden="true">🧾</span>Organisieren</button>
+    <button type="button" data-gbar="cfg"><span aria-hidden="true">⚙</span>Einstellungen</button>
   </nav>
 
   <p class="notice" id="notice" hidden></p>
@@ -73,7 +78,7 @@
       <div class="mapday" id="mapDay" hidden></div>
       <div id="map" aria-label="Karte der Route. Übernachtungsorte lassen sich mit der Maus oder dem Finger verschieben."></div>
       <div class="map-foot">
-        <div class="legend"><span>Übernachtung (Tag)</span><span class="r">Route (live)</span><span class="f">Fähre (Schätzung)</span><span class="p">Panoramastraße</span><span class="s">Sehenswürdigkeit</span><span class="pp" style="--pc:var(--p-muss)">Muss</span><span class="pp" style="--pc:var(--p-stop)">Kleiner Stop reicht</span><span class="pp" style="--pc:var(--p-nice)">nice-to-have</span><span class="pp" style="--pc:var(--p-egal)">nicht unbedingt</span></div>
+        <div class="legend"><span>Übernachtung (Tag)</span><span class="r">Route (live)</span><span class="f">Fähre (Schätzung)</span><span class="p">Panoramastraße</span><span class="s">Sehenswürdigkeit</span><span class="plegend" id="prioLegend"></span></div>
         <span class="map-note">Punkte verschieben und Stopps anlegen: „✎ Karte bearbeiten“</span>
       </div>
     </div>
@@ -116,7 +121,7 @@
       <span class="toggle" id="panoSum"></span>
     </div>
     <p class="lead">Norwegens Nationale Touristenstraßen und zwei schwedische Klassiker, sortiert nach Reisetag. Mit „Einplanen“ wird die Etappe live über die Panoramastraße berechnet; der Umweg steht jeweils grün darunter.</p>
-    <p class="hint spaced">Tippe bei einer Straße auf ihre Priorität, nochmal tippen nimmt sie weg. Auf der Karte: <b>Rot</b> = Muss, <b>Gelb</b> = nice-to-have, <b>Braun</b> = nicht unbedingt, Grün = ohne Priorität. Breit = eingeplant, gestrichelt = nicht eingeplant.</p>
+    <p class="hint spaced">Tippe bei einer Straße auf ihre Priorität, nochmal tippen nimmt sie weg. Farben auf der Karte: <span id="panoLegend"></span> · Grün = ohne Priorität. Breit = eingeplant, gestrichelt = nicht eingeplant. Ändern unter <a href="#prioritaeten">Einstellungen → Prioritäten</a>.</p>
     <div class="chips" id="panoChips" role="group" aria-label="Nach Priorität filtern"></div>
     <div class="cards" id="panoCards"></div>
   </section>
@@ -134,14 +139,14 @@
   <!-- ORTE -->
   <section id="v-orte" hidden aria-labelledby="h-orte">
     <h2 id="h-orte">Orte priorisieren</h2>
-    <p class="lead">Alle Übernachtungsorte, Stopps und Ziele deiner Route, nach Reisetag sortiert. Tippe auf eine Priorität, nochmal tippen nimmt sie weg. Auf der Karte: <b>Rot</b> = Muss, <b>Orange</b> = Kleiner Stop reicht, <b>Gelb</b> = nice-to-have, <b>Braun</b> = nicht unbedingt.</p>
+    <p class="lead">Alle Übernachtungsorte, Stopps und Ziele deiner Route, nach Reisetag sortiert. Tippe auf eine Priorität, nochmal tippen nimmt sie weg. Farben auf der Karte: <span id="ortLegend"></span>. Ändern unter <a href="#prioritaeten">Einstellungen → Prioritäten</a>.</p>
     <div class="chips" id="ortChips" role="group" aria-label="Nach Priorität filtern"></div>
     <div class="chips" id="ortTypes" role="group" aria-label="Nach Art filtern"></div>
     <ul class="ortlist" id="ortList"></ul>
     <form class="add" id="addOrt" autocomplete="off">
       <div class="fields">
         <label class="lbl" for="oName">Eigener Ort<input type="text" id="oName" maxlength="60" placeholder="z. B. Henningsvær"></label>
-        <label class="lbl" for="oPrio">Priorität<select id="oPrio"><option value="">ohne</option><option value="muss">Muss</option><option value="stop">Kleiner Stop reicht</option><option value="nice">nice-to-have</option><option value="egal">nicht unbedingt</option></select></label>
+        <label class="lbl" for="oPrio">Priorität<select id="oPrio"></select></label>
         <button class="btn" type="submit">Hinzufügen</button>
       </div>
       <p class="hint">Der Ort wird über OpenStreetMap gesucht. Er ändert die Route nicht, er erscheint nur hier und auf der Karte.</p>
@@ -221,11 +226,14 @@
       <h2 id="h-todo">Vor der Abfahrt erledigen</h2>
       <label class="toggle"><input type="checkbox" id="todoOpen"> Nur Offenes zeigen</label>
     </div>
+    <div class="chips" id="todoChips" role="group" aria-label="Nach Kategorie filtern"></div>
     <div class="group"><div id="todoRows"></div></div>
     <form class="add" id="addTodo" autocomplete="off">
-      <div class="fields">
+      <div class="fields four todoadd">
         <label class="lbl" for="tTitle">Neue Aufgabe<input type="text" id="tTitle" maxlength="120" placeholder="z. B. Nachbarn wegen Post fragen"></label>
         <label class="lbl" for="tDue">Bis wann?<input type="date" id="tDue"></label>
+        <label class="lbl" for="tPrio">Priorität<select id="tPrio"></select></label>
+        <label class="lbl" for="tCat" id="tCatLbl" hidden>Kategorie<select id="tCat"></select></label>
         <button class="btn" type="submit">Hinzufügen</button>
       </div>
       <p class="formerr" id="tErr"></p>
@@ -266,7 +274,7 @@
     <form class="add" id="addBuy" autocomplete="off">
       <div class="fields four">
         <label class="lbl" for="bName">Was willst du kaufen?<input type="text" id="bName" maxlength="80" placeholder="z. B. Kopfnetz gegen Mücken"></label>
-        <label class="lbl" for="bPrio">Priorität<select id="bPrio"><option>Muss</option><option selected>Sollte</option><option>Nice-to-have</option></select></label>
+        <label class="lbl" for="bPrio">Priorität<select id="bPrio"></select></label>
         <label class="lbl" for="bPrice">Preis (€)<input type="number" id="bPrice" min="0" step="0.01" inputmode="decimal"></label>
         <label class="lbl" for="bCat">Kategorie<select id="bCat"></select></label>
       </div>
@@ -277,6 +285,18 @@
       </div>
       <p class="formerr" id="bErr"></p>
     </form>
+  </section>
+
+  <!-- EINSTELLUNGEN -->
+  <section id="v-kategorien" class="cfg" hidden aria-labelledby="h-cats">
+    <h2 id="h-cats">Kategorien</h2>
+    <p class="lead">Farbe und Name direkt ändern, mit den Pfeilen sortieren. Beim Umbenennen ändern sich alle zugehörigen Einträge mit, beim Löschen wählst du, wohin sie kommen.</p>
+    <div class="cfggrid" id="cfg-kategorien"></div>
+  </section>
+  <section id="v-prioritaeten" class="cfg" hidden aria-labelledby="h-prios">
+    <h2 id="h-prios">Prioritäten</h2>
+    <p class="lead">Farbe und Name direkt ändern, mit den Pfeilen nach Wichtigkeit sortieren. Die Farben gelten auch auf der Karte.</p>
+    <div class="cfggrid one" id="cfg-prioritaeten"></div>
   </section>
 
   <footer class="foot">
@@ -317,15 +337,11 @@
     <div class="three">
       <label class="lbl" for="gDrive">Fahrzeit pro Tag, max. (h)<input type="number" id="gDrive" min="2" max="12" step="0.5"></label>
       <label class="lbl" for="gDays">Reisetage, höchstens<input type="number" id="gDays" min="2" max="90" step="1"></label>
-      <label class="lbl" for="gNice">Umweg je nice-to-have, max. (h)<input type="number" id="gNice" min="0" max="10" step="0.5"></label>
     </div>
-    <div class="three">
-      <label class="lbl" for="gMuss">Zeit je Muss-Ort (h)<input type="number" id="gMuss" min="0" max="12" step="0.5"></label>
-      <label class="lbl" for="gStop">Zeit je kleinem Stop (h)<input type="number" id="gStop" min="0" max="6" step="0.25"></label>
-      <label class="lbl" for="gStayNice">Zeit je nice-to-have (h)<input type="number" id="gStayNice" min="0" max="12" step="0.5"></label>
-    </div>
+    <div id="genLevels" class="genlevels"></div>
+    <p class="hint">Regeln, Namen und Farben änderst du unter <a href="#prioritaeten" id="genCfg">Einstellungen → Prioritäten</a>.</p>
     <label class="toggle"><input type="checkbox" id="gAccess"> An- und Abreise wie in der Grundroute (gleiche Fähren und Brücken)</label>
-    <label class="toggle"><input type="checkbox" id="gUnprio"> Orte ohne Priorität wie „nice-to-have“ behandeln</label>
+    <label class="toggle"><input type="checkbox" id="gUnprio"> Auch Ziele ohne Priorität mitnehmen, wenn der Umweg klein ist</label>
     <p class="formerr" id="genErr"></p>
     <div class="acts"><button class="btn" type="submit" id="genStart">Route berechnen</button><button class="btn ghost" type="button" id="genStop" hidden>Abbrechen</button><span class="hint" id="genProg" aria-live="polite"></span></div>
   </form>
@@ -360,6 +376,7 @@
 <script src="toll.js"></script>
 <script src="ferrycost.js"></script>
 <script src="ferries.js"></script>
+<script src="einstellungen.js"></script>
 <script src="lists.js"></script>
 <script src="prio.js"></script>
 <script src="varianten.js"></script>

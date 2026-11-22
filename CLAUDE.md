@@ -23,7 +23,7 @@ klassische Skripte in `app/`, die sich den globalen Gültigkeitsbereich teilen.
 
 ## Aufbau
 Ladereihenfolge (siehe Ende von `app/index.html`):
-`config → extras → app → stops → osm → toll → ferrycost → ferries → lists → prio → varianten → planer → sky → aurora → journal → sync → cache → backup → pwa`
+`config → extras → app → stops → osm → toll → ferrycost → ferries → einstellungen → lists → prio → varianten → planer → sky → aurora → journal → sync → cache → backup → pwa`
 
 | Datei | Aufgabe |
 |---|---|
@@ -33,8 +33,9 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `osm.js` | Tankstellen und Trinkwasser (Overpass) |
 | `toll.js`, `ferrycost.js`, `ferries.js` | Maut-Schätzung, Fährkosten-Abgleich, Abfahrten (Entur, nur Norwegen) |
 | `lists.js` | Reiter, Kosten, To-dos, Packliste, Kaufen, `normalizeState()` für Datenumstellungen |
+| `einstellungen.js` | Reiter Kategorien und Prioritäten; Vorgaben in `CFG_DEFAULT`/`defaultLevels()`, eigene in `state.settings.cfg` |
 | `theme.js` (im `<head>`) | Hell/Dunkel/Auto; CSS nur über `:root[data-theme="dark"]`, in JS `isDark()` und Ereignis `themechange` |
-| `prio.js` | Prioritäten für Panoramastraßen und Orte, Kartenfarben (`PRIO_COLORS`) |
+| `prio.js` | Prioritäten für Panoramastraßen und Orte, Kartenfarben |
 | `varianten.js` | mehrere Routen (`state.routeList`, `state.routeId`); gewählte Route liegt in `state.days`, nur andere haben `data` |
 | `planer.js` | Route aus Prioritäten; Kennzeichen an Punkten: `wp` (Wegpunkt), `anchor` (An-/Abreise), `key` (Ziel/eigener Ort), an Tagen `auto` (Schlafplatz unterwegs), `panos` |
 | `sky.js`, `aurora.js` | Nachthimmel, Kp-Prognose, Polarlicht-Karte (NOAA) |
@@ -46,6 +47,8 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 - Neue Datei: in `index.html` **und** in `CORE` in `sw.js` eintragen, sonst fehlt sie offline.
 - Ändert sich das Format berechneter Routen: `RSTORE` hochzählen. Achtung, auch der Cloud-Cache `route_cache`
   liefert dann noch alte Einträge mit gleichem Schlüssel.
+- Kategorien und Prioritäten nie fest eintragen: `packCats()`, `costCats()`, `todoCats()`, `listPrios()`, `prioLevels()`; von der App
+  gebrauchte Kostenarten über `costSys("Fähren")` (die Person kann sie umbenennen).
 - Kosten immer über `activeCosts()` auswerten (Posten anderer Routen zählen nicht). Grundroute (`base`) nie löschen.
 - Vorhandene Daten in der Cloud dürfen nie kaputtgehen: neue Felder über `normalizeState()` ergänzen.
 - `extras.json` wird auf dem PC der Person von einem Skript erzeugt, das nicht im Repository liegt. Wird die Datei

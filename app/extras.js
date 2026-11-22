@@ -196,7 +196,7 @@ function sightCard(x) {
   const on = isPlanned("sights", x.id);
   return `<article class="card sight-card${on ? " on" : ""}">
     ${gallery("sight:" + x.id)}
-    <h4>${esc(x.name)}${ortPrio("s:" + x.id) ? ` <span class="ppill" style="--pc:var(--p-${ortPrio("s:" + x.id)});--pi:var(--pi-${ortPrio("s:" + x.id)})">${PRIO_LABEL[ortPrio("s:" + x.id)]}</span>` : ""}</h4>
+    <h4>${esc(x.name)}${ortPrio("s:" + x.id) ? ` <span class="ppill" style="--pc:var(--p-${ortPrio("s:" + x.id)});--pi:var(--pi-${ortPrio("s:" + x.id)})">${esc(prioName(ortPrio("s:" + x.id)))}</span>` : ""}</h4>
     <span class="meta">${esc(x.type)} · ca. ${fmtShort(x.visit)} vor Ort${x.detour ? ` · ${fmtShort(x.detour)} Umweg` : " · direkt an der Strecke"}</span>
     <p>${esc(x.desc)}</p>
     <div class="acts">
@@ -234,7 +234,7 @@ function drawExtras() {
     const line = L.polyline(p.geom, { pane: "panoPane", interactive: false, color, ...(on ? { weight: pr ? 13 : 8, opacity: pr ? 1 : .55 } : { weight: pr ? 4.5 : 3.5, opacity: pr ? 1 : .75, dashArray: "4 7" }) });
     const hit = L.polyline(p.geom, { pane: "panoPane", color: "#000", opacity: 0, weight: 16, bubblingMouseEvents: false });
     hit.bindPopup(() => popupPano(p), { maxWidth: 300, minWidth: 240 });
-    hit.bindTooltip(esc(p.name) + (pr ? " · " + PRIO_LABEL[pr] : ""), { sticky: true });
+    hit.bindTooltip(esc(p.name) + (pr ? " · " + esc(prioName(pr)) : ""), { sticky: true });
     line.addTo(panoLayer); hit.addTo(panoLayer); panoLines[p.id] = hit;
   }
   if (SHOW.sights) for (const x of SIGHTS()) {
@@ -242,7 +242,7 @@ function drawExtras() {
     const c = ortMapColor("s:" + x.id), pr = ortPrio("s:" + x.id);
     const m = L.marker([x.lat, x.lon], { icon: L.divIcon({ className: "", html: `<div class="smk${on ? " on" : ""}${c ? " prio" : ""}"${c ? ` style="--pc:${c}"` : ""}></div>`, iconSize: [16, 16], iconAnchor: [8, 8] }), riseOnHover: true });
     m.bindPopup(() => popupSight(x), { maxWidth: 300, minWidth: 240 });
-    m.bindTooltip(esc(x.name) + (c ? " · " + PRIO_LABEL[pr] : ""), { direction: "top", offset: [0, -8] });
+    m.bindTooltip(esc(x.name) + (c ? " · " + esc(prioName(pr)) : ""), { direction: "top", offset: [0, -8] });
     m.addTo(sightLayer); sightMarkers[x.id] = m;
   }
 }

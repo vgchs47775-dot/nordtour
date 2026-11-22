@@ -34,7 +34,9 @@ const VIEWS = {
   kosten: "#costGroups .group",
   todos: "#todoRows .todo-row",
   packen: "#packGroups .group",
-  kaufen: "#buyOpen .card"
+  kaufen: "#buyOpen .card",
+  kategorien: "#cfg-kategorien .cfgrow",
+  prioritaeten: "#cfg-prioritaeten .cfgrow"
 };
 
 const problems = [];

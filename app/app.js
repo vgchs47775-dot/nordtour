@@ -304,7 +304,7 @@ function drawMarkers() {
     // Farbe nach Priorität des Ortes (prio.js)
     const pc = typeof nightMapColor === "function" ? nightMapColor(d) : null;
     const m = L.marker([d.lat, d.lon], { icon: icon(i + 1, (d.id === selDay ? "sel" : "") + (pc ? " prio" : ""), pc ? `--pc:${pc};--pi:${prioInk("o:" + ortSlug(d.night))}` : ""), draggable: !!window.mapEdit, title: d.night, riseOnHover: true });
-    m.bindTooltip(`${i + 1}. ${esc(d.night)}${pc ? " · " + PRIO_LABEL[ortPrio("o:" + ortSlug(d.night))] : ""}`, { className: "mtip", direction: "top", offset: [0, -12] });
+    m.bindTooltip(`${i + 1}. ${esc(d.night)}${pc ? " · " + esc(prioName(ortPrio("o:" + ortSlug(d.night)))) : ""}`, { className: "mtip", direction: "top", offset: [0, -12] });
     m.on("click", () => selectDay(d.id, false));
     m.on("dragend", e => moveNight(d.id, e.target.getLatLng()));
     m.addTo(markerLayer); markers[d.id] = m;

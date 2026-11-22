@@ -26,7 +26,7 @@ const ignoredFerries = () => state.settings?.ferryIgnore || [];
 function ferryCheck() {
   const list = sortedDays(), missing = [], orphans = [];
   let unknownDays = 0;
-  const fc = activeCosts().filter(c => c.cat === "Fähren");
+  const fc = activeCosts().filter(c => c.cat === costSys("Fähren"));
   list.forEach((d, i) => {
     const pts = dayPoints(d, i, list); if (pts.length < 2) return;
     const r = routes[routeKey(pts)];
@@ -77,9 +77,9 @@ document.addEventListener("click", e => {
   if (!a && !g) return;
   const m = document.getElementById("ferryCheck")._missing?.[+(a || g).dataset[a ? "fadd" : "fign"]]; if (!m) return;
   if (a) {
-    state.costs.push({ id: nid("c"), cat: "Fähren", dayId: m.d.id, title: `Fähre ${m.f.name}`, amount: m.est ? m.est.eur : null,
+    state.costs.push({ id: nid("c"), cat: costSys("Fähren"), dayId: m.d.id, title: `Fähre ${m.f.name}`, amount: m.est ? m.est.eur : null,
       note: m.est ? `grob geschätzt: ${num(m.est.nok)} NOK (Fährtarif nach Länge) – bitte prüfen` : "Preis noch offen" });
-    openCostGroups.add("Fähren");
+    closedCostGroups.delete(costSys("Fähren"));
   } else {
     state.settings.ferryIgnore = [...ignoredFerries(), m.d.id + "|" + m.f.name];
   }

@@ -1,13 +1,13 @@
 /* Route aus Prioritäten erstellen.
    Reihenfolge: Alle Punkte werden dort einsortiert, wo sie an der Grundroute liegen (varianten.js, „base“) –
    so bleibt die Rundreise eine Rundreise und nichts springt quer durchs Land.
-   Muss + Kleiner Stop: immer. nice-to-have: wenn der (über Valhalla gemessene) Umweg klein genug ist und die
-   Tage reichen. nicht unbedingt: nie. Danach Aufteilung in Tage nach Fahrzeit; liegt am Tagesende kein Ort,
+   Was hineinkommt, bestimmt die Regel der Stufe (einstellungen.js): immer/kurz = immer, umweg = wenn der (über
+   Valhalla gemessene) Umweg klein genug ist und die Tage reichen, nie = nie. Danach Aufteilung in Tage nach Fahrzeit; liegt am Tagesende kein Ort,
    wird ein Schlafplatz unterwegs gesetzt (d.auto). Wegpunkte von Panoramastraßen und der An-/Abreise: v.wp.
    Wird nach varianten.js geladen. */
 "use strict";
 
-const GEN_DEFAULT = { drive: 6, days: null, nice: 1.5, muss: 2, stop: 0.5, stayNice: 1, access: true, unprio: false };
+const GEN_DEFAULT = { drive: 6, days: null, access: true, unprio: false };
 const GEN_MAX_DAY = 11;             // Fahrt + Aufenthalte je Tag, höchstens (h)
 const GEN_SPAN = 1200;              // Luftlinie je Valhalla-Anfrage (Server erlaubt 1500 km)
 let genCancel = false, genBusy = false, genOut = null;
@@ -165,20 +165,20 @@ function genCandidates(opt) {
     for (const v of d.via || []) if (hasPos(v)) { const k = "o:" + ortSlug(v.name || ""); if (!basePos.has(k)) basePos.set(k, trackPos(base.track, v, i, i).pos); }
     if (hasPos(d)) { const k = "o:" + ortSlug(d.night || ""); if (!basePos.has(k)) basePos.set(k, trackPos(base.track, d, i, i).pos); }
   });
-  const stayOf = { muss: opt.muss, stop: opt.stop, nice: opt.stayNice };
+  const levels = prioLevels(), any = { stay: 1, detour: 1.5, ...levels.find(l => l.rule === "umweg"), rule: "umweg", id: "_ohne", name: "ohne Priorität" };
+  const levelOf = pr => { const l = pr ? levels.find(x => x.id === pr) : opt.unprio ? any : null; return l && l.rule !== "nie" ? l : null; };
+  const rank = l => { const i = levels.indexOf(l); return i < 0 ? 999 : i; };
   for (const o of allOrte()) {
-    const pr = ortPrio(o.key) || (opt.unprio ? "nice" : null);
-    if (!pr || pr === "egal") continue;
+    const lv = levelOf(ortPrio(o.key)); if (!lv) continue;
     const s = o.type === "sight" ? SIGHTS().find(x => x.id === o.id) : null, si = s ? base.days.findIndex(d => d.id === s.day) : -1;
     const pos = basePos.get(o.key) ?? (si >= 0 ? trackPos(base.track, o, Math.max(0, si - 1), si + 1).pos : trackPos(base.track, o).pos);
-    const stay = pr === "stop" ? stayOf.stop : s ? s.visit : stayOf[pr];
-    items.push({ kind: "ort", prio: pr, pos, end: pos, label: o.name, nodes: [{ name: o.name, lat: o.lat, lon: o.lon, key: o.key, stay, prio: pr }] });
+    const stay = lv.rule === "kurz" ? lv.stay : s ? s.visit : lv.stay;
+    items.push({ kind: "ort", lv, rank: rank(lv), pos, end: pos, label: o.name, nodes: [{ name: o.name, lat: o.lat, lon: o.lon, key: o.key, stay }] });
   }
   for (const p of PANO()) {
-    const pr = panoPrio(p.id) || (opt.unprio ? "nice" : null);
-    if (!pr || pr === "egal") continue;
+    const lv = levelOf(panoPrio(p.id)); if (!lv) continue;
     const b = panoNodes(p, base);
-    items.push({ kind: "pano", prio: pr, pos: b.pos, end: b.end, label: p.name, pano: p, nodes: b.nodes });
+    items.push({ kind: "pano", lv, rank: rank(lv), pos: b.pos, end: b.end, label: p.name, pano: p, nodes: b.nodes });
   }
   return { base, items };
 }
@@ -190,7 +190,7 @@ function accessItems(base) {
     const vias = (d.via || []).filter(hasPos), marked = vias.filter(v => v.anchor);
     for (const v of marked.length ? marked : vias) {
       const pos = trackPos(base.track, v, i, i).pos;
-      out.push({ kind: "weg", prio: "muss", pos, end: pos, label: v.name, nodes: [{ name: v.name, lat: v.lat, lon: v.lon, wp: true, anchor: true, ...(v.ferry ? { ferry: true } : {}) }] });
+      out.push({ kind: "weg", pos, end: pos, label: v.name, nodes: [{ name: v.name, lat: v.lat, lon: v.lon, wp: true, anchor: true, ...(v.ferry ? { ferry: true } : {}) }] });
     }
   });
   return out;
@@ -242,8 +242,8 @@ const seqHours = seq => seq.slice(1).reduce((s, n, i) => s + leg(seq[i], n).h, 0
 async function generateRoute(opt, progress) {
   genCancel = false;
   const { base, items } = genCandidates(opt);
-  const forced = items.filter(x => x.prio !== "nice"), optional = items.filter(x => x.prio === "nice").sort((a, b) => a.pos - b.pos);
-  if (!items.length) throw new Error("Es gibt noch keine Prioritäten. Setze welche in den Reitern „Orte“ und „Panoramastraßen“.");
+  const forced = items.filter(x => x.lv.rule !== "umweg"), optional = items.filter(x => x.lv.rule === "umweg").sort((a, b) => a.rank - b.rank || a.pos - b.pos);
+  if (!items.length) throw new Error("Es gibt noch keine Ziele mit einer Priorität, die eingeplant wird. Setze welche in den Reitern „Orte“ und „Panoramastraßen“.");
   const lastBase = base.days[base.days.length - 1], h = home();
   const start = { name: nightBase(h.name), lat: h.lat, lon: h.lon, wp: true };
   const end = { name: "zu Hause", lat: hasPos(lastBase) && /zu hause/i.test(lastBase.night || "") ? lastBase.lat : h.lat, lon: hasPos(lastBase) && /zu hause/i.test(lastBase.night || "") ? lastBase.lon : h.lon, home: true };
@@ -258,31 +258,31 @@ async function generateRoute(opt, progress) {
   }
   let seq = make(chosen); await ensureLegs(seq);
   let hours = seqHours(seq);
-  // nice-to-have einzeln prüfen: Umweg = Fahrzeit mit minus ohne
+  // Ziele mit Regel „umweg“ einzeln prüfen, wichtigste Stufe zuerst: Umweg = Fahrzeit mit minus ohne
   const taken = [];
   for (const [i, c] of optional.entries()) {
     if (genCancel) throw new Error("abgebrochen");
-    progress(`nice-to-have ${i + 1} von ${optional.length}: ${c.label} …`);
+    progress(`Umweg prüfen ${i + 1} von ${optional.length}: ${c.label} …`);
     try {
       let s2 = make([...chosen, c]);
       // grob vorab: unerreichbar weite Umwege gar nicht erst anfragen
       let air = 0; for (let k = 1; k < s2.length; k++) air += hav(s2[k - 1], s2[k]);
       let air0 = 0; for (let k = 1; k < seq.length; k++) air0 += hav(seq[k - 1], seq[k]);
-      if ((air - air0) / 90 > opt.nice + 1) { omitted.push({ ...c, why: `Umweg zu groß (grob ${fmtShort((air - air0) * 1.3 / 65)})` }); continue; }
+      if ((air - air0) / 90 > c.lv.detour + 1) { omitted.push({ ...c, why: `Umweg zu groß (grob ${fmtShort((air - air0) * 1.3 / 65)})` }); continue; }
       let list = [...chosen, c];
       if (c.kind === "pano") list = await orient(list, c, make);
       s2 = make(list); await ensureLegs(s2);
       const used = list[list.length - 1], extra = seqHours(s2) - hours;
-      if (extra > opt.nice + 0.01) { omitted.push({ ...c, why: `Umweg ${fmtShort(extra)}` }); continue; }
+      if (extra > c.lv.detour + 0.01) { omitted.push({ ...c, why: `Umweg ${fmtShort(extra)}` }); continue; }
       chosen = list; seq = s2; hours += extra; taken.push({ c: used, extra });
     } catch (e) { if (genCancel) throw e; omitted.push({ ...c, why: "nicht erreichbar" }); }
   }
-  // Zu viele Tage? Dann die nice-to-have mit dem größten Aufwand wieder weglassen
+  // Zu viele Tage? Dann Umweg-Ziele wieder weglassen: unwichtigste Stufe zuerst, darin die mit dem größten Aufwand
   let days = splitDays(seq, opt);
   while (days.length > opt.days && taken.length) {
     if (genCancel) throw new Error("abgebrochen");
-    progress(`Noch ${days.length} Tage – nice-to-have werden gekürzt …`);
-    taken.sort((a, b) => (b.extra + (b.c.nodes[0].stay || 0)) - (a.extra + (a.c.nodes[0].stay || 0)));
+    progress(`Noch ${days.length} Tage – Umwege werden gekürzt …`);
+    taken.sort((a, b) => b.c.rank - a.c.rank || (b.extra + (b.c.nodes[0].stay || 0)) - (a.extra + (a.c.nodes[0].stay || 0)));
     const out = taken.shift();
     chosen = chosen.filter(x => x !== out.c); omitted.push({ ...out.c, why: "passt nicht mehr in die Tage" });
     seq = make(chosen); await ensureLegs(seq); days = splitDays(seq, opt);
@@ -295,7 +295,7 @@ async function generateRoute(opt, progress) {
     try { d.night.name = `bei ${await villageName(d.night.lat, d.night.lon)}`; } catch { d.night.name = "Schlafplatz unterwegs"; }
   }
   return { days: toDays(days), raw: days, chosen: chosen.filter(x => x.kind !== "weg"), omitted, opt,
-    skipped: allOrte().filter(o => ortPrio(o.key) === "egal").map(o => o.name).concat(PANO().filter(p => panoPrio(p.id) === "egal").map(p => p.name)) };
+    skipped: [...allOrte().map(o => [o.name, ortPrio(o.key)]), ...PANO().map(p => [p.name, panoPrio(p.id)])].filter(x => prioLevel(x[1])?.rule === "nie").map(x => x[0]) };
 }
 // Planungsergebnis → Reisetage der App
 function toDays(raw) {
@@ -317,9 +317,13 @@ function toDays(raw) {
 function genOptions() { return { ...GEN_DEFAULT, days: state.days.length || 24, ...(state.settings?.gen || {}) }; }
 function openGen() {
   const o = genOptions(), c = prioCounts(allOrte().map(x => ortPrio(x.key))), p = prioCounts(PANO().map(x => panoPrio(x.id)));
-  $("#gDrive").value = o.drive; $("#gDays").value = o.days; $("#gNice").value = o.nice; $("#gMuss").value = o.muss; $("#gStop").value = o.stop; $("#gStayNice").value = o.stayNice;
+  $("#gDrive").value = o.drive; $("#gDays").value = o.days;
   $("#gAccess").checked = o.access; $("#gUnprio").checked = o.unprio;
-  $("#genCounts").textContent = `Orte: ${c.muss || 0} × Muss, ${c.stop || 0} × Kleiner Stop, ${c.nice || 0} × nice-to-have, ${c.egal || 0} × nicht unbedingt. Panoramastraßen: ${p.muss || 0} × Muss, ${p.nice || 0} × nice-to-have, ${p.egal || 0} × nicht unbedingt. Muss und Kleiner Stop kommen immer hinein, „nicht unbedingt“ nie.`;
+  $("#genCounts").textContent = `${c.ohne || 0} Orte und ${p.ohne || 0} Panoramastraßen haben noch keine Priorität.`;
+  $("#genLevels").innerHTML = prioLevels().map(l => `<div class="genlevel" data-genlevel="${esc(l.id)}" style="--pc:var(--p-${l.id});--pi:var(--pi-${l.id})">
+    <span class="nm"><span class="ppill">${esc(l.name)}</span><span class="nt">${[l.ort ? `Orte: ${c[l.id] || 0}` : "", l.pano ? `Panoramastraßen: ${p[l.id] || 0}` : ""].filter(Boolean).join(", ")} · ${RULES[l.rule]}</span></span>
+    ${l.rule === "nie" ? "" : `<label class="lbl">Zeit je Ort (h)<input type="number" name="stay" min="0" max="12" step="0.25" value="${l.stay}"></label>`}
+    ${l.rule === "umweg" ? `<label class="lbl">Umweg max. (h)<input type="number" name="detour" min="0" max="10" step="0.25" value="${l.detour}"></label>` : ""}</div>`).join("");
   $("#genErr").textContent = ""; $("#genProg").textContent = ""; $("#genResult").innerHTML = ""; genOut = null;
   $("#genDlg").showModal();
 }
@@ -330,9 +334,9 @@ function renderGen(g) {
   let n = 1; while (state.routeList.some(r => r.name === `Prioritäten ${n}`)) n++;
   $("#genResult").innerHTML = `<div class="genres">
     <div class="big"><div><b>${g.days.length}</b><span>Tage</span></div><div><b>${num(km)} km</b><span>Strecke</span></div><div><b>${num(h)} h</b><span>Fahrzeit</span></div></div>
-    ${over > 0 ? `<p class="genwarn">Die Route braucht ${over} Tag${over > 1 ? "e" : ""} mehr als erlaubt (${g.opt.days}). „Muss“ und „Kleiner Stop“ lasse ich nicht weg. Erhöhe die Fahrzeit oder die Tage, oder stufe einzelne Ziele herunter.</p>` : over < 0 ? `<p class="hint">${-over} Tag${over < -1 ? "e bleiben" : " bleibt"} frei, z. B. für Ruhetage („+ Nacht“).</p>` : ""}
-    ${grp("Muss", g.chosen.filter(x => x.prio === "muss"))}${grp("Kleiner Stop reicht", g.chosen.filter(x => x.prio === "stop"))}${grp("nice-to-have, dabei", g.chosen.filter(x => x.prio === "nice"))}
-    ${grp("nice-to-have, weggelassen", g.omitted)}${grp("nicht unbedingt, weggelassen", g.skipped.map(label => ({ label })))}
+    ${over > 0 ? `<p class="genwarn">Die Route braucht ${over} Tag${over > 1 ? "e" : ""} mehr als erlaubt (${g.opt.days}). Ziele mit der Regel „immer“ lasse ich nicht weg. Erhöhe die Fahrzeit oder die Tage, oder stufe einzelne Ziele herunter.</p>` : over < 0 ? `<p class="hint">${-over} Tag${over < -1 ? "e bleiben" : " bleibt"} frei, z. B. für Ruhetage („+ Nacht“).</p>` : ""}
+    ${[...prioLevels(), { id: "_ohne", name: "ohne Priorität" }].map(l => grp(esc(l.name), g.chosen.filter(x => x.lv.id === l.id))).join("")}
+    ${grp("Weggelassen", g.omitted.map(x => ({ label: x.label, why: `${x.lv.name}, ${x.why}` })))}${grp("Nie einplanen", g.skipped.map(label => ({ label })))}
     <details open><summary>Tage</summary><ol>${g.days.map((d, i) => `<li>${fmtDate(d.date)}: ${esc(d.title)} <span class="hint">${num(g.raw[i].km)} km · ${fmtShort(g.raw[i].drive)}${d.via.filter(v => v.stay).length ? ` · ${d.via.filter(v => v.stay).map(v => esc(v.name)).join(", ")}` : ""}</span></li>`).join("")}</ol></details>
     <form id="genSave" class="inline"><label class="lbl" for="genName">Name der Route<input type="text" id="genName" maxlength="60" required value="Prioritäten ${n}"></label><button class="btn" type="submit">Speichern und auswählen</button></form>
     <p class="hint">Deine jetzige Route bleibt gespeichert und lässt sich jederzeit wieder auswählen. Fahrzeiten ohne Wartezeit an Fähren.</p></div>`;
@@ -341,14 +345,18 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#btnGen").addEventListener("click", openGen);
   $("#genClose").addEventListener("click", () => { genCancel = true; $("#genDlg").close(); });
   $("#genDlg").addEventListener("cancel", () => { genCancel = true; });
+  $("#genCfg").addEventListener("click", () => { genCancel = true; $("#genDlg").close(); });
   $("#genStop").addEventListener("click", () => { genCancel = true; });
   $("#genForm").addEventListener("submit", async e => {
     e.preventDefault(); if (genBusy) return;
     const v = id => parseFloat($(id).value), err = $("#genErr"); err.textContent = "";
-    const opt = { drive: v("#gDrive"), days: v("#gDays"), nice: v("#gNice"), muss: v("#gMuss"), stop: v("#gStop"), stayNice: v("#gStayNice"), access: $("#gAccess").checked, unprio: $("#gUnprio").checked };
-    if (Object.values(opt).some(x => typeof x === "number" && !isFinite(x))) { err.textContent = "Bitte alle Felder ausfüllen."; return; }
+    const opt = { drive: v("#gDrive"), days: v("#gDays"), access: $("#gAccess").checked, unprio: $("#gUnprio").checked };
+    const inputs = [...document.querySelectorAll("#genLevels [data-genlevel] input")];
+    if (Object.values(opt).some(x => typeof x === "number" && !isFinite(x)) || inputs.some(x => !isFinite(parseFloat(x.value)))) { err.textContent = "Bitte alle Felder ausfüllen."; return; }
     if (!navigator.onLine) { err.textContent = "Für die Berechnung brauchst du Internet."; return; }
-    state.settings.gen = opt; save();
+    const levels = cfgEdit("levels");                   // Zeiten und Umwege gehören zur Stufe
+    for (const x of inputs) { const l = levels.find(l => l.id === x.closest("[data-genlevel]").dataset.genlevel); if (l) l[x.name] = parseFloat(x.value); }
+    state.settings.gen = opt; save(); renderSettings();
     genBusy = true; $("#genStart").disabled = true; $("#genStop").hidden = false; $("#genResult").innerHTML = "";
     try { genOut = await generateRoute(opt, t => { $("#genProg").textContent = t; }); $("#genProg").textContent = ""; renderGen(genOut); }
     catch (x) { $("#genProg").textContent = ""; if (x.message === "abgebrochen") err.textContent = "Abgebrochen."; else { err.textContent = x.message; console.warn("Planer", x); } }

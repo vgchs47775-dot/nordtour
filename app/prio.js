@@ -3,29 +3,33 @@
    state.settings.ort_prio = { <Schlüssel>: Stufe }; eigene Orte stehen in state.places.
    Schlüssel eines Ortes: "o:<Name>" (Übernachtung oder Stopp – gleicher Name = gleicher Ort),
    "s:<ID>" (Ziel aus „Erleben“), "p:<ID>" (eigener Ort).
+   Die Stufen selbst (Name, Farbe, Regel) stehen in einstellungen.js; gespeichert wird ihre ID.
    Nochmaliges Antippen einer Stufe nimmt sie wieder weg. Wird nach lists.js geladen. */
 "use strict";
 
-const PRIO_LABEL = { muss: "Muss", stop: "Kleiner Stop reicht", nice: "nice-to-have", egal: "nicht unbedingt" };
-const PRIO_PANO = ["muss", "nice", "egal"], PRIO_ORT = ["muss", "stop", "nice", "egal"];
-// Einzige Quelle der Farben: Karte (Leaflet) und Seite (CSS-Variablen --p-…, --pi-… = Schrift darauf)
-const PRIO_COLORS = {
-  light: { muss: "#d32f2f", stop: "#f57c00", nice: "#f2c200", egal: "#8d5a2b" },
-  dark: { muss: "#ff5a52", stop: "#ff9838", nice: "#ffd83d", egal: "#b9824a" }
-};
-const PRIO_INK = { light: { muss: "#fff", stop: "#1b1203", nice: "#1b1203", egal: "#fff" }, dark: { muss: "#1b0605", stop: "#1b1203", nice: "#1b1203", egal: "#170d03" } };
-const prioColor = p => PRIO_COLORS[isDark() ? "dark" : "light"][p] || null;
+// Farben für Karte (Leaflet) und Seite (CSS-Variablen --p-<ID>, --pi-<ID> = Schrift darauf)
+const prioColor = p => { const l = prioLevel(p); return l ? themeColor(l.color) : null; };
 function applyPrioVars() {
-  const t = isDark() ? "dark" : "light", st = document.documentElement.style;
-  for (const p of PRIO_ORT) { st.setProperty("--p-" + p, PRIO_COLORS[t][p]); st.setProperty("--pi-" + p, PRIO_INK[t][p]); }
+  const st = document.documentElement.style;
+  for (const l of prioLevels()) { const c = themeColor(l.color); st.setProperty("--p-" + l.id, c); st.setProperty("--pi-" + l.id, inkOn(c)); }
 }
 applyPrioVars();
+// Texte und Auswahlfelder, in denen die Stufen aufgezählt werden
+function renderPrioTexts() {
+  const leg = kind => prioLevels(kind).map(l => `<span class="plg"><i class="pdot" style="background:var(--p-${l.id})"></i>${esc(l.name)}</span>`).join(" ");
+  $("#prioLegend").innerHTML = prioLevels().map(l => `<span class="pp" style="--pc:var(--p-${l.id})">${esc(l.name)}</span>`).join("");
+  $("#panoLegend").innerHTML = leg("pano"); $("#ortLegend").innerHTML = leg("ort");
+  const s = $("#oPrio"), sig = JSON.stringify(prioLevels("ort").map(l => [l.id, l.name])), cur = s.value;
+  if (s._sig !== sig) { s._sig = sig; s.innerHTML = `<option value="">ohne</option>` + prioLevels("ort").map(l => `<option value="${l.id}"${l.id === cur ? " selected" : ""}>${esc(l.name)}</option>`).join(""); }
+}
 
-const panoPrio = id => state?.settings?.pano_prio?.[id] || null;
+// Stufen, die es nicht (mehr) gibt oder die dort nicht gelten, zählen wie „ohne“
+const validPrio = (kind, p) => p && prioLevel(p)?.[kind] ? p : null;
+const panoPrio = id => validPrio("pano", state?.settings?.pano_prio?.[id]);
 const ortSlug = name => nightBase(name).trim().toLowerCase();
 function ortPrio(key) {
-  if (key.startsWith("p:")) return state?.places?.find(p => "p:" + p.id === key)?.prio || null;
-  return state?.settings?.ort_prio?.[key] || null;
+  if (key.startsWith("p:")) return validPrio("ort", state?.places?.find(p => "p:" + p.id === key)?.prio);
+  return validPrio("ort", state?.settings?.ort_prio?.[key]);
 }
 function setPrio(kind, key, val) {
   const old = kind === "pano" ? panoPrio(key) : ortPrio(key), next = old === val ? null : val;
@@ -52,14 +56,14 @@ function redrawPrio() {
 }
 function prioButtons(kind, key, name) {
   const cur = kind === "pano" ? panoPrio(key) : ortPrio(key);
-  return `<span class="prioseg" role="group" aria-label="Priorität für ${esc(name)}">` + (kind === "pano" ? PRIO_PANO : PRIO_ORT).map(p =>
-    `<button type="button" class="pb pb-${p}" data-prioset="${kind}|${esc(key)}|${p}" aria-pressed="${cur === p}">${PRIO_LABEL[p]}</button>`).join("") + `</span>`;
+  return `<span class="prioseg" role="group" aria-label="Priorität für ${esc(name)}">` + prioLevels(kind).map(({ id: p, name: label }) =>
+    `<button type="button" class="pb" style="--pbc:var(--p-${p});--pbi:var(--pi-${p})" data-prioset="${kind}|${esc(key)}|${p}" aria-pressed="${cur === p}">${esc(label)}</button>`).join("") + `</span>`;
 }
 // Filterleiste mit Anzahl (zugleich Farblegende)
 const prioFilter = { pano: "alle", ort: "alle" };
 function prioChips(kind, counts) {
-  const defs = [["alle", "Alle"], ...(kind === "pano" ? PRIO_PANO : PRIO_ORT).map(p => [p, PRIO_LABEL[p]]), ["ohne", "ohne Priorität"]];
-  return defs.map(([v, l]) => `<button type="button" class="fchip" data-priofilter="${kind}|${v}" aria-pressed="${prioFilter[kind] === v}">${PRIO_LABEL[v] ? `<i class="pdot" style="background:var(--p-${v})"></i>` : ""}${l} <b>${counts[v] || 0}</b></button>`).join("");
+  const defs = [["alle", "Alle"], ...prioLevels(kind).map(l => [l.id, l.name]), ["ohne", "ohne Priorität"]];
+  return defs.map(([v, l]) => `<button type="button" class="fchip" data-priofilter="${kind}|${v}" aria-pressed="${prioFilter[kind] === v}">${prioLevel(v) ? `<i class="pdot" style="background:var(--p-${v})"></i>` : ""}${esc(l)} <b>${counts[v] || 0}</b></button>`).join("");
 }
 function prioCounts(list) {
   const c = { alle: list.length, ohne: 0 };
@@ -143,7 +147,7 @@ const ortMarkers = {};
 // Farbe für Übernachtungs-Nummern (app.js) und Ziel-Rauten (extras.js); null = wie bisher
 const ortMapColor = key => SHOW.orte ? prioColor(ortPrio(key)) : null;
 const nightMapColor = d => ortMapColor("o:" + ortSlug(d.night || ""));
-const prioInk = key => PRIO_INK[isDark() ? "dark" : "light"][ortPrio(key)] || "#fff";
+const prioInk = key => { const c = prioColor(ortPrio(key)); return c ? inkOn(c) : "#fff"; };
 function ortPin(color) {
   return L.divIcon({ className: "", iconSize: [24, 32], iconAnchor: [12, 31], popupAnchor: [0, -28], tooltipAnchor: [0, -28],
     html: `<svg class="ortpin" viewBox="0 0 24 32" width="24" height="32" aria-hidden="true"><path d="M12 31C12 31 22.5 18.5 22.5 11.5a10.5 10.5 0 1 0-21 0C1.5 18.5 12 31 12 31z" fill="${color}" stroke="#fff" stroke-width="1.6"/><circle cx="12" cy="11.5" r="4" fill="#fff"/></svg>` });
@@ -157,7 +161,7 @@ function drawOrte() {
     // Übernachtungen tragen die Farbe an ihrer Nummer – bei ausgeschalteter Route als Stecknadel
     if (o.type === "sight" || (o.type === "night" && ((SHOW.route && o.days.length) || !p)) || (o.type === "stop" && !p)) continue;
     const m = L.marker([o.lat, o.lon], { icon: ortPin(p ? prioColor(p) : "#78909c"), riseOnHover: true, zIndexOffset: 200, title: o.name });
-    m.bindTooltip(`${esc(o.name)}${p ? " · " + PRIO_LABEL[p] : ""}`, { direction: "top" });
+    m.bindTooltip(`${esc(o.name)}${p ? " · " + esc(prioName(p)) : ""}`, { direction: "top" });
     m.bindPopup(() => ortPopup(o.key), { maxWidth: 300, minWidth: 220 });
     m.addTo(ortLayer); ortMarkers[o.key] = m;
   }
