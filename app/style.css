@@ -543,3 +543,13 @@ nav.tabs { -webkit-mask-image: none; mask-image: none; padding-right: 0; gap: 0;
 .genlevel { display: grid; grid-template-columns: minmax(0, 1fr) 120px 120px; gap: 10px; align-items: center; border-left: 5px solid var(--pc); padding-left: 10px; min-height: 44px; }
 .genlevel .nt { display: block; margin-top: 3px; }
 @media (max-width: 560px) { .genlevel { grid-template-columns: 1fr 1fr; } .genlevel .nm { grid-column: 1 / -1; } }
+
+/* Zwischenübernachtung */
+#spMap { height: min(300px, 34vh); border: 1px solid var(--line); border-radius: 10px; z-index: 0; }
+.sptime { display: grid; gap: 6px; }
+.sptime input[type="range"] { width: 100%; height: 32px; accent-color: var(--sun); cursor: pointer; padding: 0; }
+.sptime #spAt { color: var(--ink); font-variant-numeric: tabular-nums; }
+#spChips { margin: 4px 0 0; max-height: 130px; overflow-y: auto; }
+.spres { display: grid; gap: 4px; background: var(--bg); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.spres i { font-style: normal; }
+.spres .long { color: var(--warn); font-weight: 600; }

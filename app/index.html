@@ -330,6 +330,27 @@
   </form>
 </dialog>
 
+<dialog id="splitDlg" class="gendlg" aria-labelledby="spTitle">
+  <div class="toolbar"><h2 id="spTitle">🌙 Zwischenübernachtung</h2><button class="btn ghost mini" type="button" id="spClose">Abbrechen</button></div>
+  <form id="spForm" autocomplete="off">
+    <p class="hint" id="spStage"></p>
+    <div id="spMap" aria-label="Karte der Etappe. Antippen wählt den Schlafplatz."></div>
+    <div class="sptime">
+      <label class="lbl" for="spSlider">Wo anhalten? <span id="spAt"></span><input type="range" id="spSlider" min="0"></label>
+      <div class="acts"><button type="button" class="btn ghost mini" data-spstep="-0.5">− 30 min</button><button type="button" class="btn ghost mini" data-spstep="mid">Mitte</button><button type="button" class="btn ghost mini" data-spstep="0.5">+ 30 min</button><span class="hint">oder auf die Karte tippen</span></div>
+    </div>
+    <div id="spChipsBox"><span class="hint">Stopps und Orte an dieser Etappe</span><div class="chips" id="spChips"></div></div>
+    <div class="inline"><label class="lbl" for="spQuery">Oder einen Ort suchen<input type="text" id="spQuery" maxlength="60" placeholder="z. B. Røros"></label><button class="btn ghost" type="button" id="spSearch">Suchen</button></div>
+    <div class="spres" id="spRes"></div>
+    <div class="two">
+      <label class="lbl" for="spName">Name der Übernachtung<input type="text" id="spName" maxlength="60"></label>
+      <label class="lbl" for="spDates">Reisedaten<select id="spDates"></select></label>
+    </div>
+    <p class="formerr" id="spErr"></p>
+    <div class="acts"><button class="btn" type="submit">Übernachtung einfügen</button></div>
+  </form>
+</dialog>
+
 <dialog id="genDlg" class="gendlg" aria-labelledby="genTitle">
   <div class="toolbar"><h2 id="genTitle">✨ Route aus Prioritäten</h2><button class="btn ghost mini" type="button" id="genClose">Schließen</button></div>
   <form id="genForm">
@@ -381,6 +402,7 @@
 <script src="prio.js"></script>
 <script src="varianten.js"></script>
 <script src="planer.js"></script>
+<script src="etappen.js"></script>
 <script src="sky.js"></script>
 <script src="aurora.js"></script>
 <script src="journal.js"></script>

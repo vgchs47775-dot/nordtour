@@ -19,7 +19,7 @@ const DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 let state = null;          // { days, costs, todos, items_kaufen, items_packen, settings }
 let routes = {};           // Cache: Schlüssel = Wegpunkte, Wert = { km, h, ferryKm, ferryH, parts:[{ferry, enc|pts}] }
 let routeStatus = {};      // dayId -> "busy" | "err"
-let selDay = null, editingDay = null, undoSnap = null;
+let selDay = null, editingDay = null, undoSnap = null, undoAfter = null;   // undoAfter: { snap, run } – was zusätzlich zurückgenommen wird (etappen.js)
 
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -381,7 +381,8 @@ $("#notice").addEventListener("pointerleave", () => {
 $("#notice").addEventListener("click", e => {
   if (e.target.id === "btnHide") $("#notice").hidden = true;
   if (e.target.id === "btnUndo" && undoSnap) {
-    state.days = JSON.parse(undoSnap); undoSnap = null; save(); $("#notice").hidden = true; refresh();
+    state.days = JSON.parse(undoSnap); if (undoAfter?.snap === undoSnap) undoAfter.run();
+    undoSnap = null; undoAfter = null; save(); $("#notice").hidden = true; refresh();
   }
 });
 
@@ -457,6 +458,8 @@ function dayHtml(d, idx, list) {
         ${hasPos(d) && !/zu hause/i.test(d.night || "") ? `<a class="btn ghost mini" href="https://park4night.com/de/search?lat=${d.lat}&lng=${d.lon}&z=12" target="_blank" rel="noopener noreferrer" title="Stellplätze rund um ${esc(d.night)} bei park4night ansehen">park4night ↗</a>` : ""}
         <button type="button" class="btn ghost mini" data-edit="${esc(d.id)}">Bearbeiten</button>
         <button type="button" class="btn ghost mini" data-extend="${esc(d.id)}" title="Eine weitere Nacht am selben Ort – alle folgenden Tage rücken einen Tag nach hinten">+ Nacht</button>
+        ${typeof canSplit === "function" && canSplit(d, r) ? `<button type="button" class="btn ghost mini" data-split="${esc(d.id)}" title="Unterwegs übernachten: teilt diese Etappe in zwei kürzere">🌙 Zwischenübernachtung</button>` : ""}
+        ${typeof mergeNight === "function" && idx < list.length - 1 ? `<button type="button" class="btn ghost mini" data-mergenight="${esc(d.id)}" title="Hier nicht übernachten: diese und die nächste Etappe werden zusammengelegt">Nacht auflösen</button>` : ""}
         ${st === "err" ? `<button type="button" class="btn ghost mini" data-retry="${esc(d.id)}">Route neu versuchen</button>` : ""}
       </span>` : ""}
       </span>`;
@@ -467,7 +470,7 @@ function dayHtml(d, idx, list) {
 // Zwischenziele als Liste: Name (mit Suche), Aufenthalt, „ab hier Fähre“, sortieren, löschen
 function viaRow(v = {}) {
   const has = typeof v.lat === "number";
-  return `<div class="viarow" data-lat="${has ? v.lat : ""}" data-lon="${has ? v.lon : ""}" data-orig="${esc(v.name || "")}" data-extra="${esc(JSON.stringify({ wp: v.wp, anchor: v.anchor, key: v.key }))}">
+  return `<div class="viarow" data-lat="${has ? v.lat : ""}" data-lon="${has ? v.lon : ""}" data-orig="${esc(v.name || "")}" data-extra="${esc(JSON.stringify({ wp: v.wp, pv: v.pv, anchor: v.anchor, key: v.key }))}">
     <span class="vmain"><input type="text" class="vname" maxlength="60" value="${esc(v.name || "")}" placeholder="Ort, z. B. Egersund" aria-label="Name des Zwischenziels">
       <button type="button" class="btn ghost mini" data-vsearch title="Ort suchen">Suchen</button></span>
     <span class="vopts">

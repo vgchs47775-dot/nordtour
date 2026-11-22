@@ -23,7 +23,7 @@ klassische Skripte in `app/`, die sich den globalen Gültigkeitsbereich teilen.
 
 ## Aufbau
 Ladereihenfolge (siehe Ende von `app/index.html`):
-`config → extras → app → stops → osm → toll → ferrycost → ferries → einstellungen → lists → prio → varianten → planer → sky → aurora → journal → sync → cache → backup → pwa`
+`config → extras → app → stops → osm → toll → ferrycost → ferries → einstellungen → lists → prio → varianten → planer → etappen → sky → aurora → journal → sync → cache → backup → pwa`
 
 | Datei | Aufgabe |
 |---|---|
@@ -38,6 +38,7 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `prio.js` | Prioritäten für Panoramastraßen und Orte, Kartenfarben |
 | `varianten.js` | mehrere Routen (`state.routeList`, `state.routeId`); gewählte Route liegt in `state.days`, nur andere haben `data` |
 | `planer.js` | Route aus Prioritäten; Kennzeichen an Punkten: `wp` (Wegpunkt), `anchor` (An-/Abreise), `key` (Ziel/eigener Ort), an Tagen `auto` (Schlafplatz unterwegs), `panos` |
+| `etappen.js` | Etappe teilen (Zwischenübernachtung) und Nacht auflösen; Felder `src`, `sights`, `stop`, `split` an Tagen, `pv` an Punkten (Erklärung im Dateikopf) |
 | `sky.js`, `aurora.js` | Nachthimmel, Kp-Prognose, Polarlicht-Karte (NOAA) |
 | `journal.js` | Tagebuch; Fotos im privaten Supabase-Bucket `tagebuch`, Warteschlange in IndexedDB |
 | `sync.js`, `cache.js`, `backup.js` | Cloud-Abgleich (`trips`), geteilter Zwischenspeicher (`route_cache`), Sicherungen (`trip_backups`) |

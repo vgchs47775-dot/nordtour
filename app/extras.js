@@ -28,6 +28,10 @@ function togglePlanned(kind, id) {
   state.settings[key] = [...set];
   save(); refresh();
   const p = kind === "pano" && PANO().find(x => x.id === id);
+  if (p && state.days.some(d => d.split && p.days.includes(d.id))) {
+    notice("Diese Etappe ist durch eine Zwischenübernachtung geteilt: Einplanen ändert die Strecke hier nicht. Löse die Nacht auf, plane die Straße ein und teile die Etappe danach neu.");
+    return;
+  }
   if (p && !state.days.some(d => p.days.includes(d.id)))
     notice("Diese Route wurde aus Prioritäten erstellt: Einplanen ändert hier die Strecke nicht. Setze eine Priorität und erstelle die Route neu.");
 }
@@ -35,7 +39,7 @@ function togglePlanned(kind, id) {
 /* ================= Panoramastraßen → Wegpunkte ================= */
 // Liefert die Zwischenziele eines Tages mit den eingeplanten Panoramastraßen – oder null.
 function panoVia(d) {
-  const vs = EXTRAS?.variants?.[d.id]; if (!vs) return null;
+  const vs = EXTRAS?.variants?.[d.id]; if (!vs || d.split) return null;      // geteilte Etappe: Wegpunkte stehen fest in d.via (etappen.js)
   const ids = [...new Set(Object.keys(vs).flatMap(k => k.split("+")))].filter(id => isPlanned("pano", id)).sort();
   return ids.length ? vs[ids.join("+")] || null : null;
 }
@@ -44,7 +48,7 @@ function panoCompare(p) {
   const list = sortedDays(), out = [];
   for (const dayId of p.days) {
     const i = list.findIndex(x => x.id === dayId), v = EXTRAS.variants?.[dayId]?.[p.id];
-    if (i < 0 || !v) continue;
+    if (i < 0 || !v || list[i].split) continue;
     const d = list[i];
     out.push({ d, base: dayPoints(d, i, list, d.via || []), with: dayPoints(d, i, list, v) });
   }
@@ -91,6 +95,7 @@ async function ensurePanoRoutes() {
 /* ================= Tag in der Routenliste ================= */
 // Reisetag eines Ziels: der vorgesehene Tag – in anderen Routen der Tag, der am nächsten vorbeikommt (bis 80 km)
 function sightDayId(x) {
+  const part = state.days.find(d => d.sights?.includes(x.id)); if (part) return part.id;   // Etappe geteilt (etappen.js)
   if (state.days.some(d => d.id === x.day)) return x.day;
   let best = null, bd = 80;
   for (const d of state.days) for (const p of [d, ...(d.via || [])]) if (hasPos(p)) { const km = hav(p, x); if (km < bd) { bd = km; best = d.id; } }
@@ -106,8 +111,8 @@ function dayExtrasHtml(d, r) {
     (typeof skyLine === "function" ? skyLine(d) : "");
   if (!EXTRAS) return sky;
   let h = "";
-  for (const p of PANO().filter(p => isPlanned("pano", p.id) && (p.days.includes(d.id) || d.panos?.includes(p.id)))) {
-    const part = p.days.length > 1 && p.days.includes(d.id) ? ` (Teil ${p.days.indexOf(d.id) + 1} von ${p.days.length})` : "";
+  for (const p of PANO().filter(p => isPlanned("pano", p.id) && (d.split ? d.panos?.includes(p.id) : p.days.includes(d.id) || d.panos?.includes(p.id)))) {
+    const part = p.days.length > 1 && p.days.includes(d.id) && !d.split ? ` (Teil ${p.days.indexOf(d.id) + 1} von ${p.days.length})` : "";
     h += `<span class="pano">Über ${esc(p.name)}${part}</span>`;
   }
   // Tagesprogramm: eingeplante Sehenswürdigkeiten + Aufenthalte an eigenen Stopps

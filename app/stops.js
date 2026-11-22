@@ -30,7 +30,7 @@ function extendNight(id) {
   const list = sortedDays(), i = list.findIndex(d => d.id === id), d = list[i]; if (!d) return;
   undoSnap = JSON.stringify(state.days);
   const rest = { id: uid(), order: i + 0.5, date: addDays(d.date, 1), title: `Ruhetag in ${nightBase(d.night)}`, night: d.night,
-    lat: d.lat, lon: d.lon, ferries: 0, via: [] };
+    lat: d.lat, lon: d.lon, ferries: 0, via: [], ...(d.auto ? { auto: true } : {}) };
   state.days.push(rest);
   const ids = list.map(x => x.id); ids.splice(i + 1, 0, rest.id);
   renumberDays(ids); save(); refresh();
@@ -89,7 +89,7 @@ function stopPopup(d, i) {
     <b>Stopp ${i + 1}${v.ferry ? " · ab hier Fähre" : ""}</b>
     <label class="lbl">Name<input type="text" name="name" maxlength="60" value="${esc(v.name)}"></label>
     <label class="lbl">Aufenthalt (Minuten)<input type="number" name="stay" min="0" max="1440" step="5" value="${v.stay || ""}" placeholder="0"></label>
-    <div class="acts"><button class="btn mini" type="submit">Speichern</button><button class="btn danger mini" type="button" data-stopdel>Löschen</button></div>
+    <div class="acts"><button class="btn mini" type="submit">Speichern</button>${v.ferry ? "" : `<button class="btn ghost mini" type="button" data-nightstop="${esc(d.id)}:${i}">🌙 Hier übernachten</button>`}<button class="btn danger mini" type="button" data-stopdel>Löschen</button></div>
   </form>`;
 }
 async function moveStop(dayId, i, ll) {
@@ -107,7 +107,8 @@ map.on("click", e => {
   if (!d) { addPopup.setLatLng(e.latlng).setContent(`<div class="pop"><span>Wähle zuerst in der Liste oder auf der Karte einen Tag aus, dann kannst du hier einen Stopp einlegen.</span></div>`).openOn(map); return; }
   addPopup.setLatLng(e.latlng).setContent(`<div class="pop"><b>${esc(fmtDate(d.date))}: ${esc(d.title)}</b>
     <span>Hier einen Stopp einlegen? Er wird an der Stelle der Route eingefügt, an der er den kleinsten Umweg macht.</span>
-    <div class="acts"><button class="btn mini" type="button" data-addstop="${esc(d.id)}" data-ll="${e.latlng.lat},${e.latlng.lng}">Stopp hinzufügen</button></div></div>`).openOn(map);
+    <div class="acts"><button class="btn mini" type="button" data-addstop="${esc(d.id)}" data-ll="${e.latlng.lat},${e.latlng.lng}">Stopp hinzufügen</button>
+      <button class="btn ghost mini" type="button" data-nightat="${esc(d.id)}" data-ll="${e.latlng.lat},${e.latlng.lng}">🌙 Hier übernachten</button></div></div>`).openOn(map);
 });
 async function addStop(dayId, lat, lon) {
   const list = sortedDays(), i = list.findIndex(x => x.id === dayId), d = list[i]; if (!d) return;
