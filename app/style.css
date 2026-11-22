@@ -565,3 +565,8 @@ nav.tabs { -webkit-mask-image: none; mask-image: none; padding-right: 0; gap: 0;
 .nogap { color: var(--warn); }
 .cfgnight { grid-column: 1 / -1; flex-basis: 100%; }
 .nightgap .pdot { margin-right: 6px; }
+
+/* Etappe nicht berechenbar: Grund und Abhilfe */
+.rerr { display: block; background: var(--sun-soft); border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+.rerr b { color: var(--warn); }
+.rerr .btn { margin-top: 6px; }

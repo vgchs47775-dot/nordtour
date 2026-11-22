@@ -71,9 +71,7 @@ function onPano(p, o) {
 const legKey = (a, b) => `${a.lat.toFixed(4)},${a.lon.toFixed(4)}>${b.lat.toFixed(4)},${b.lon.toFixed(4)}`;
 async function fetchLegs(nodes) {
   const q = { locations: nodes.map(p => ({ lat: p.lat, lon: p.lon, search_filter: { exclude_ferry: true } })), costing: "auto", units: "kilometers", directions_type: "maneuvers" };
-  const r = await fetch(ROUTER + encodeURIComponent(JSON.stringify(q)));
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.trip) throw new Error(j.error || "Routing-Server antwortet mit " + r.status);
+  const j = await askRouter(q, { stop: () => genCancel });
   j.trip.legs.forEach((l, i) => legCache.set(legKey(nodes[i], nodes[i + 1]), { h: l.summary.time / 3600, km: l.summary.length, shape: l.shape,
     ferries: (l.maneuvers || []).filter(m => m.type === 28).map(m => [m.begin_shape_index, m.end_shape_index]) }));
   await sleep(350);                                    // den freiwilligen Server schonen
@@ -92,6 +90,8 @@ async function ensureLegs(seq) {
     }
     try { await fetchLegs(run); }
     catch (e) {
+      if (genCancel) throw new Error("abgebrochen");
+      if (!e.perm) throw Object.assign(new Error("Der Routing-Server ist gerade gestört. Versuche es in ein paar Minuten noch einmal."), { temp: true });
       if (run.length === 2) throw new Error(`Zwischen „${run[0].name}“ und „${run[1].name}“ wurde keine Strecke gefunden (${e.message}).`);
       await fetchLegs(run.slice(0, 2)).catch(x => { throw new Error(`Zwischen „${run[0].name}“ und „${run[1].name}“ wurde keine Strecke gefunden (${x.message}).`); });
       k = i + 1;
@@ -287,7 +287,7 @@ function buildSeq(items, start, end, track) {
 async function orient(list, item, make) {
   const other = { ...item, flip: !item.flip }, l2 = list.map(x => x === item ? other : x), a = make(list), b = make(l2);
   await ensureLegs(a);
-  try { await ensureLegs(b); } catch (e) { if (genCancel) throw e; return list; }
+  try { await ensureLegs(b); } catch (e) { if (genCancel || e.temp) throw e; return list; }
   return seqHours(b) < seqHours(a) - 0.05 ? l2 : list;
 }
 const seqHours = seq => seq.slice(1).reduce((s, n, i) => s + leg(seq[i], n).h, 0);
@@ -328,7 +328,7 @@ async function generateRoute(opt, progress) {
       const used = list[list.length - 1], extra = seqHours(s2) - hours;
       if (extra > c.lv.detour + 0.01) { omitted.push({ ...c, why: `Umweg ${fmtShort(extra)}` }); continue; }
       chosen = list; seq = s2; hours += extra; taken.push({ c: used, extra });
-    } catch (e) { if (genCancel) throw e; omitted.push({ ...c, why: "nicht erreichbar" }); }
+    } catch (e) { if (genCancel || e.temp) throw e; omitted.push({ ...c, why: "nicht erreichbar" }); }
   }
   // Zu viele Tage? Dann Umweg-Ziele wieder weglassen: unwichtigste Stufe zuerst, darin die mit dem größten Aufwand
   let days = splitDays(seq, opt);

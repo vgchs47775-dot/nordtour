@@ -18,7 +18,8 @@ const DAY_NAMES = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 
 let state = null;          // { days, costs, todos, items_kaufen, items_packen, settings }
 let routes = {};           // Cache: Schlüssel = Wegpunkte, Wert = { km, h, ferryKm, ferryH, parts:[{ferry, enc|pts}] }
-let routeStatus = {};      // dayId -> "busy" | "err"
+let routeStatus = {};      // dayId -> "busy" | "offline" | "wait" (Störung, neuer Versuch folgt) | "err" (bleibt, siehe routeErr)
+const routeErr = {};       // Schlüssel wie routes -> { msg, pt } – Strecken, die sich so nicht berechnen lassen
 let selDay = null, editingDay = null, undoSnap = null, undoAfter = null;   // undoAfter: { snap, run } – was zusätzlich zurückgenommen wird (etappen.js)
 
 const $ = s => document.querySelector(s);
@@ -121,15 +122,30 @@ function decodePolyline(str, prec = 6) {
   }
   return out;
 }
+// Anfrage an den Routing-Server. Bei einer Störung (Netz, überlastet) bis zu zweimal wiederholen;
+// e.perm = die Strecke selbst ist das Problem, ein neuer Versuch hilft nicht.
+async function askRouter(q, { tries = 3, stop } = {}) {
+  for (let n = 1; ; n++) {
+    let e;
+    try {
+      const r = await fetch(ROUTER + encodeURIComponent(JSON.stringify(q)), AbortSignal.timeout ? { signal: AbortSignal.timeout(30000) } : {});
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.trip) return j;
+      e = new Error(j.error || "Routing-Server antwortet mit " + r.status);
+      e.code = j.error_code; e.perm = !!j.error_code && r.status >= 400 && r.status < 500 && r.status !== 429;
+    } catch (x) { e = new Error("Routing-Server nicht erreichbar"); e.cause = x; }
+    if (e.perm || n >= tries || !navigator.onLine || stop?.()) throw e;
+    await sleep(n * 2500);
+    if (stop?.()) throw e;
+  }
+}
 // Autoroute über den Valhalla-Server der FOSSGIS (OpenStreetMap-Daten, kein Schlüssel nötig).
 // Fähren im OSM-Netz (z. B. Puttgarden–Rødby, Fjordfähren) sind enthalten.
-async function routeCar(pts) {
+async function routeCar(pts, opt) {
   // exclude_ferry: Wegpunkte nie mitten auf einer Fährstrecke einrasten lassen (z. B. Punkt im Fjord)
   const q = { locations: pts.map(p => ({ lat: +p.lat.toFixed(5), lon: +p.lon.toFixed(5), search_filter: { exclude_ferry: true } })),
     costing: "auto", units: "kilometers", directions_type: "maneuvers", language: "de-DE" };
-  const r = await fetch(ROUTER + encodeURIComponent(JSON.stringify(q)));
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || !j.trip) throw new Error(j.error || "Routing-Server antwortet mit " + r.status);
+  const j = await askRouter(q, opt).catch(e => { e.pts = pts; throw e; });
   // Fähren erkennen: Manöver-Typ 28 = „auf die Fähre fahren“; der Name steht oft im Straßennamen („Halhjem - Sandvikvåg“)
   const ferries = [];
   for (const l of j.trip.legs) {
@@ -146,7 +162,7 @@ async function routeCar(pts) {
   return { km: j.trip.summary.length, h: j.trip.summary.time / 3600, encs: j.trip.legs.map(l => l.shape), ferries };
 }
 // Teilt die Wegpunkte in Autostrecken (OSRM) und eingetragene Fährabschnitte (Luftlinie).
-async function computeRoute(pts) {
+async function computeRoute(pts, opt) {
   const res = { km: 0, h: 0, ferryKm: 0, ferryH: 0, parts: [], ferries: [] };
   // gleiche Punkte hintereinander (z. B. Ruhetag am selben Ort) nicht routen
   pts = pts.filter((p, i) => i === 0 || hav(pts[i - 1], p) > 0.05 || pts[i - 1].ferry);
@@ -154,7 +170,7 @@ async function computeRoute(pts) {
   let run = [pts[0]];
   const flush = async () => {
     if (run.length < 2) return;
-    const r = await routeCar(run); res.km += r.km; res.h += r.h; res.ferries.push(...r.ferries);
+    const r = await routeCar(run, opt); res.km += r.km; res.h += r.h; res.ferries.push(...r.ferries);
     for (const enc of r.encs) res.parts.push({ ferry: false, enc });
     await sleep(350);
   };
@@ -173,6 +189,34 @@ async function computeRoute(pts) {
   await flush();
   return res;
 }
+// Welcher Punkt ist schuld? Liefert { msg, pt }
+async function findRouteError(e) {
+  const pts = e.pts || [], nm = p => `„${nightBase(p.name || "Wegpunkt")}“`;
+  if (e.code === 171) try {
+    const r = await fetch(ROUTER.replace("/route?", "/locate?") + encodeURIComponent(JSON.stringify({ costing: "auto",
+      locations: pts.map(p => ({ lat: +p.lat.toFixed(5), lon: +p.lon.toFixed(5), search_filter: { exclude_ferry: true } })) })));
+    const j = await r.json(), bad = pts.filter((p, i) => !j[i]?.edges?.length && !j[i]?.nodes?.length);
+    if (bad.length) return { msg: `${bad.map(nm).join(" und ")} ${bad.length > 1 ? "liegen" : "liegt"} zu weit von einer Straße entfernt.`, pt: bad[0] };
+  } catch { /* dann paarweise suchen */ }
+  if (pts.length === 2) return { msg: `Zwischen ${nm(pts[0])} und ${nm(pts[1])} wurde keine Autostrecke gefunden.`, pt: pts[1] };
+  for (let i = 1; i < pts.length; i++) {
+    await sleep(1100);
+    try { await routeCar([pts[i - 1], pts[i]]); }
+    catch (x) { if (x.perm) return { msg: `Zwischen ${nm(pts[i - 1])} und ${nm(pts[i])} wurde keine Autostrecke gefunden.`, pt: pts[i] }; break; }
+  }
+  return { msg: `Der Routing-Server meldet: ${e.message}.` };
+}
+// Nach einer Störung von selbst weiterprobieren, mit wachsenden Pausen
+const RETRY_S = [30, 60, 120, 300, 600];
+let retryTimer = null, retryNo = 0;
+function planRetry() {
+  clearTimeout(retryTimer); retryTimer = null;
+  if (!Object.values(routeStatus).includes("wait")) { retryNo = 0; return; }
+  retryTimer = setTimeout(() => { retryTimer = null; if (document.visibilityState === "visible") ensureRoutes(); }, RETRY_S[Math.min(retryNo++, RETRY_S.length - 1)] * 1000);
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && !retryTimer && Object.values(routeStatus).includes("wait")) ensureRoutes();
+});
 let routeGen = 0;
 let ferryNews = [];
 async function ensureRoutes() {
@@ -181,26 +225,33 @@ async function ensureRoutes() {
   if (gen !== routeGen) return;
   const list = sortedDays();
   ferryNews = [];
+  let down = 0;                                       // Störungen hintereinander: dann nicht weiter anfragen
   for (let i = 0; i < list.length; i++) {
     if (gen !== routeGen) return;                     // neuere Berechnung läuft
     const d = list[i], pts = dayPoints(d, i, list);
     if (pts.length < 2) continue;
     const key = routeKey(pts);
-    if (routes[key]) { applyRoute(d, routes[key]); continue; }
+    if (routes[key]) { applyRoute(d, routes[key]); if (routeStatus[d.id]) { delete routeStatus[d.id]; renderDay(d.id); } continue; }   // alte Meldung nicht stehen lassen
+    if (routeErr[key]) { if (routeStatus[d.id] !== "err") { routeStatus[d.id] = "err"; renderDay(d.id); } continue; }
     if (!navigator.onLine) { if (routeStatus[d.id] !== "offline") { routeStatus[d.id] = "offline"; renderDay(d.id); } continue; }
+    if (down >= 2) { if (routeStatus[d.id] !== "wait") { routeStatus[d.id] = "wait"; renderDay(d.id); } continue; }
     routeStatus[d.id] = "busy"; renderDay(d.id); updateStats();
     try {
-      const r = await computeRoute(pts);
+      const r = await computeRoute(pts, { tries: down ? 1 : 3, stop: () => gen !== routeGen });
+      down = 0;
       routes[key] = r; delete routeStatus[d.id];
       if (typeof cacheUp === "function") cacheUp("route", key, r);     // mit anderen Geräten teilen
       applyRoute(d, r); saveRoutes(); save();
     } catch (e) {
-      routeStatus[d.id] = navigator.onLine ? "err" : "offline"; console.warn("Routing", d.id, e);
+      console.warn("Routing", d.id, e);
+      if (gen !== routeGen) return;
+      if (e.perm) { routeErr[key] = await findRouteError(e); down = 0; } else if (navigator.onLine) down++;
+      routeStatus[d.id] = e.perm ? "err" : navigator.onLine ? "wait" : "offline";
     }
     if (gen !== routeGen) return;
     renderDay(d.id); drawRoutes(); updateStats();
   }
-  drawRoutes(); updateStats();
+  drawRoutes(); updateStats(); planRetry();
   if (typeof renderCostTop === "function" && state.costs) renderCostTop();   // Spritkosten hängen an den km
   if (ferryNews.length) { notice("⛴ " + ferryNews.join(" · ")); ferryNews = []; }
   if (typeof ensureOsm === "function") ensureOsm();                          // Tankstellen & Trinkwasser
@@ -405,6 +456,7 @@ function daySummary(d, r, st) {
     chips.push(`<span>${num(r.km)} km</span>`, `<span class="${total > LONG_DAY ? "long" : ""}">${fmtShortH(total)}</span>`);
   } else if (d.km) chips.push(`<span>ca. ${num(d.km)} km</span>`);
   if (st === "err") chips.push(`<span class="err">Routing fehlgeschlagen</span>`);
+  else if (st === "wait") chips.push(`<span class="busy">Routing-Server gestört – neuer Versuch folgt</span>`);
   const fl = r?.ferries || [];
   if (fl.length) chips.push(`<span class="ferry" title="${esc(fl.map(f => f.name).join(", "))}">⛴ ${fl.length}</span>`);
   if (typeof osmFor === "function" && r) {
@@ -422,6 +474,18 @@ function daySummary(d, r, st) {
 }
 const fmtShortH = h => { const m = Math.round(h * 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")}`; };
 
+// Grund und Abhilfe, wenn sich eine Etappe nicht berechnen lässt
+function routeErrHtml(d, idx, list, pts) {
+  const x = routeErr[routeKey(pts)]; if (!x) return "";
+  const p = x.pt, same = q => p && q && hasPos(q) && hav(p, q) < 0.05;
+  const how = !p ? "Prüfe die Punkte dieses Tages unter „Bearbeiten“."
+    : (d.via || []).some(same) ? `Ziehe den Punkt mit „✎ Karte bearbeiten“ auf eine Straße, oder suche ihn unter „Bearbeiten“ neu bzw. entferne ihn dort mit ✕.`
+    : same(d) ? `Das ist die Übernachtung dieses Tages. Ziehe sie mit „✎ Karte bearbeiten“ auf eine Straße, oder suche unter „Bearbeiten“ einen anderen Ort.`
+    : same(list[idx - 1]) ? `Das ist die Übernachtung des Vortags. Ziehe sie mit „✎ Karte bearbeiten“ auf eine Straße, oder suche beim Vortag unter „Bearbeiten“ einen anderen Ort.`
+    : idx === 0 && same(pts[0]) ? "Das ist dein Startpunkt."
+    : "Der Punkt gehört zu einer eingeplanten Panoramastraße. Nimm sie im Reiter „Panoramastraßen“ heraus.";
+  return `<span class="rerr"><b>${esc(x.msg)}</b> ${how}${p ? ` <button type="button" class="btn ghost mini" data-errpt="${esc(d.id)}|${p.lat}|${p.lon}">Punkt zeigen</button>` : ""}</span>`;
+}
 function dayHtml(d, idx, list) {
   const dt = new Date(d.date + "T12:00:00");
   const pts = dayPoints(d, idx, list);
@@ -445,6 +509,7 @@ function dayHtml(d, idx, list) {
       <span class="movebtns"><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:-1" aria-label="Tag nach oben"${idx === 0 ? " disabled" : ""}>↑</button><button type="button" class="btn ghost mini" data-move="${esc(d.id)}:1" aria-label="Tag nach unten"${idx === list.length - 1 ? " disabled" : ""}>↓</button></span>`;
   if (open) h += `
       <span class="details">
+      ${st === "err" ? routeErrHtml(d, idx, list, pts) : ""}
       ${d.sub ? `<span class="s">${esc(d.sub)}</span>` : ""}
       ${drive ? `<span class="drive">${drive}</span>` : ""}
       ${typeof ferryHtml === "function" ? ferryHtml(d, r) : ""}
@@ -460,7 +525,7 @@ function dayHtml(d, idx, list) {
         <button type="button" class="btn ghost mini" data-extend="${esc(d.id)}" title="Eine weitere Nacht am selben Ort – alle folgenden Tage rücken einen Tag nach hinten">+ Nacht</button>
         ${typeof canSplit === "function" && canSplit(d, r) ? `<button type="button" class="btn ghost mini" data-split="${esc(d.id)}" title="Unterwegs übernachten: teilt diese Etappe in zwei kürzere">🌙 Zwischenübernachtung</button>` : ""}
         ${typeof mergeNight === "function" && idx < list.length - 1 ? `<button type="button" class="btn ghost mini" data-mergenight="${esc(d.id)}" title="Hier nicht übernachten: diese und die nächste Etappe werden zusammengelegt">Nacht auflösen</button>` : ""}
-        ${st === "err" ? `<button type="button" class="btn ghost mini" data-retry="${esc(d.id)}">Route neu versuchen</button>` : ""}
+        ${st === "err" || st === "wait" ? `<button type="button" class="btn ghost mini" data-retry="${esc(d.id)}">Route neu versuchen</button>` : ""}
       </span>` : ""}
       </span>`;
   h += `</span>`;
@@ -598,7 +663,19 @@ $("#days").addEventListener("click", async e => {
   const t = e.target;
   if (t.closest("[data-edit]")) { editingDay = t.closest("[data-edit]").dataset.edit; renderDays(); return; }
   if (t.closest("[data-cancel]")) { editingDay = null; renderDays(); return; }
-  if (t.closest("[data-retry]")) { delete routeStatus[t.closest("[data-retry]").dataset.retry]; ensureRoutes(); return; }
+  if (t.closest("[data-retry]")) {
+    const id = t.closest("[data-retry]").dataset.retry, list = sortedDays(), i = list.findIndex(x => x.id === id);
+    delete routeStatus[id]; if (i >= 0) delete routeErr[routeKey(dayPoints(list[i], i, list))];
+    ensureRoutes(); return;
+  }
+  if (t.closest("[data-errpt]")) {
+    const [id, lat, lon] = t.closest("[data-errpt]").dataset.errpt.split("|");
+    if (!SHOW.route) { SHOW.route = true; syncMapButtons(); redrawMap(); }
+    if (typeof setMapList === "function") setMapList("map");
+    selectDay(id, false); map.invalidateSize(); pendingFit = false; map.setView([+lat, +lon], 10, { animate: false });
+    L.popup().setLatLng([+lat, +lon]).setContent(`<div class="pop"><span>Dieser Punkt lässt sich nicht anfahren. Mit „✎ Karte bearbeiten“ kannst du ihn verschieben.</span></div>`).openOn(map);
+    $(".mapbox").scrollIntoView({ block: "start" }); return;
+  }
   if (t.closest("[data-del]")) {
     const id = t.closest("[data-del]").dataset.del, d = state.days.find(x => x.id === id);
     if (!confirm(`Tag „${d?.title}“ wirklich löschen? Die folgenden Tage rücken dann einen Tag nach vorne.`)) return;

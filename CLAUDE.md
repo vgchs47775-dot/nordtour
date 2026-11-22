@@ -65,6 +65,7 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 - Nie neu zeichnen, ohne Cursor und Eingaben in offenen Feldern zu erhalten.
 - Ziehen und Verschieben nur in ausdrücklich eingeschalteten Modi („Reihenfolge ändern“, „Karte bearbeiten“).
 - Routing: Wegpunkte mit `search_filter.exclude_ferry`, sonst rasten Punkte am Wasser auf Fährlinien ein.
+- Routing-Anfragen nur über `askRouter()` (wiederholt Störungen; `e.perm` = Strecke selbst nicht berechenbar, Grund in `routeErr`).
 - Freiwillige Dienste schonen (Valhalla, Nominatim höchstens 1 Anfrage/s, Overpass, OSM-Kacheln): Ergebnisse speichern,
   keine Massenabfragen, keine Kartenkacheln vorab laden.
 - Externe Skripte nur von cdnjs, jsdelivr oder unpkg mit exakter, mindestens zwei Wochen alter Version.
