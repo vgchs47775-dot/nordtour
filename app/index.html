@@ -16,6 +16,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="theme.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -25,7 +26,8 @@
       <h1>Nordtour <span>2027</span></h1>
       <div class="dates">Hamburg → Nordkapp → Hamburg</div>
     </div>
-    <div class="topbar"><span class="chip warn" id="netstate" hidden>Offline – die App läuft weiter, Änderungen werden später hochgeladen</span><div class="sync" id="sync" aria-live="polite"></div></div>
+    <div class="topbar"><span class="chip warn" id="netstate" hidden>Offline – die App läuft weiter, Änderungen werden später hochgeladen</span><div class="sync" id="sync" aria-live="polite"></div>
+      <div class="seg" role="group" aria-label="Darstellung"><button type="button" data-themeset="light" aria-pressed="false">☀ Hell</button><button type="button" data-themeset="dark" aria-pressed="false">☾ Dunkel</button><button type="button" data-themeset="auto" aria-pressed="true">Auto</button></div></div>
     <div class="updbar" id="updbar" hidden><span>Eine neue Version der App ist verfügbar.</span><button class="btn mini" type="button">Jetzt neu laden</button></div>
     <div class="stats">
       <div class="stat"><span class="k">Abfahrt in</span><span class="v" id="sCount">–</span><span class="x" id="sDates"></span></div>
@@ -40,6 +42,7 @@
       <a href="#route" data-view="route">Route</a>
       <a href="#panorama" data-view="panorama">Panoramastraßen <span class="n" id="nPano">0</span></a>
       <a href="#erleben" data-view="erleben">Erleben <span class="n" id="nSights">0</span></a>
+      <a href="#orte" data-view="orte">Orte <span class="n" id="nOrte">0</span></a>
     </div>
     <div class="tgroup" data-group="trip"><span class="glabel">Unterwegs</span>
       <a href="#himmel" data-view="himmel">Nachthimmel</a>
@@ -70,7 +73,7 @@
       <div class="mapday" id="mapDay" hidden></div>
       <div id="map" aria-label="Karte der Route. Übernachtungsorte lassen sich mit der Maus oder dem Finger verschieben."></div>
       <div class="map-foot">
-        <div class="legend"><span>Übernachtung (Tag)</span><span class="r">Route (live)</span><span class="f">Fähre (Schätzung)</span><span class="p">Panoramastraße</span><span class="s">Sehenswürdigkeit</span><span class="o">⛽ / 💧 beim gewählten Tag</span></div>
+        <div class="legend"><span>Übernachtung (Tag)</span><span class="r">Route (live)</span><span class="f">Fähre (Schätzung)</span><span class="p">Panoramastraße</span><span class="s">Sehenswürdigkeit</span><span class="o">⛽ / 💧 beim gewählten Tag</span><span class="pp" style="--pc:var(--p-muss)">Muss</span><span class="pp" style="--pc:var(--p-stop)">Kleiner Stop reicht</span><span class="pp" style="--pc:var(--p-nice)">nice-to-have</span><span class="pp" style="--pc:var(--p-egal)">nicht unbedingt</span></div>
         <span class="map-note">Punkte verschieben und Stopps anlegen: „✎ Karte bearbeiten“</span>
       </div>
     </div>
@@ -104,6 +107,8 @@
       <span class="toggle" id="panoSum"></span>
     </div>
     <p class="lead">Norwegens Nationale Touristenstraßen und zwei schwedische Klassiker, sortiert nach Reisetag. Mit „Einplanen“ wird die Etappe live über die Panoramastraße berechnet; der Umweg steht jeweils grün darunter.</p>
+    <p class="hint spaced">Tippe bei einer Straße auf ihre Priorität, nochmal tippen nimmt sie weg. Auf der Karte: <b>Rot</b> = Muss, <b>Gelb</b> = nice-to-have, <b>Braun</b> = nicht unbedingt, Grün = ohne Priorität. Breit = eingeplant, gestrichelt = nicht eingeplant.</p>
+    <div class="chips" id="panoChips" role="group" aria-label="Nach Priorität filtern"></div>
     <div class="cards" id="panoCards"></div>
   </section>
 
@@ -115,6 +120,24 @@
     </div>
     <p class="lead">Ziele an deiner Strecke, nach Reisetag sortiert. Eingeplantes erscheint beim Tag mit Besuchszeit und Umweg. Alle Zeiten sind grobe Richtwerte.</p>
     <div id="sightList"></div>
+  </section>
+
+  <!-- ORTE -->
+  <section id="v-orte" hidden aria-labelledby="h-orte">
+    <h2 id="h-orte">Orte priorisieren</h2>
+    <p class="lead">Alle Übernachtungsorte, Stopps und Ziele deiner Route, nach Reisetag sortiert. Tippe auf eine Priorität, nochmal tippen nimmt sie weg. Auf der Karte: <b>Rot</b> = Muss, <b>Orange</b> = Kleiner Stop reicht, <b>Gelb</b> = nice-to-have, <b>Braun</b> = nicht unbedingt.</p>
+    <div class="chips" id="ortChips" role="group" aria-label="Nach Priorität filtern"></div>
+    <div class="chips" id="ortTypes" role="group" aria-label="Nach Art filtern"></div>
+    <ul class="ortlist" id="ortList"></ul>
+    <form class="add" id="addOrt" autocomplete="off">
+      <div class="fields">
+        <label class="lbl" for="oName">Eigener Ort<input type="text" id="oName" maxlength="60" placeholder="z. B. Henningsvær"></label>
+        <label class="lbl" for="oPrio">Priorität<select id="oPrio"><option value="">ohne</option><option value="muss">Muss</option><option value="stop">Kleiner Stop reicht</option><option value="nice">nice-to-have</option><option value="egal">nicht unbedingt</option></select></label>
+        <button class="btn" type="submit">Hinzufügen</button>
+      </div>
+      <p class="hint">Der Ort wird über OpenStreetMap gesucht. Er ändert die Route nicht, er erscheint nur hier und auf der Karte.</p>
+      <p class="formerr" id="oErr"></p>
+    </form>
   </section>
 
   <!-- NACHTHIMMEL -->
@@ -298,6 +321,7 @@
 <script src="ferrycost.js"></script>
 <script src="ferries.js"></script>
 <script src="lists.js"></script>
+<script src="prio.js"></script>
 <script src="sky.js"></script>
 <script src="aurora.js"></script>
 <script src="journal.js"></script>

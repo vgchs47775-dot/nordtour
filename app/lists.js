@@ -67,12 +67,12 @@ const chk = (kind, id, done, label) =>
   `<button type="button" class="chk" role="checkbox" aria-checked="${done ? "true" : "false"}" aria-label="${esc(label)}" data-chk="${kind}:${esc(id)}">${CHECK_SVG}</button>`;
 const rmBtn = (kind, id, label) =>
   `<button type="button" class="del" data-rm="${kind}:${esc(id)}" aria-label="${esc(label)} löschen">Löschen</button>`;
-const coll = kind => ({ costs: state.costs, todos: state.todos, pack: state.pack, buy: state.buy }[kind]);
+const coll = kind => ({ costs: state.costs, todos: state.todos, pack: state.pack, buy: state.buy, places: state.places }[kind]);
 const findItem = (kind, id) => coll(kind)?.find(x => x.id === id);
 function commit() { save(); renderLists(); }
 
 /* ================= Reiter ================= */
-const VIEWS = ["route", "panorama", "erleben", "himmel", "tagebuch", "kosten", "todos", "packen", "kaufen"];
+const VIEWS = ["route", "panorama", "erleben", "orte", "himmel", "tagebuch", "kosten", "todos", "packen", "kaufen"];
 // Gruppen: Planen / Unterwegs / Organisieren. Pro Gruppe wird der zuletzt benutzte Reiter gemerkt.
 const lastInGroup = (() => { try { return JSON.parse(localStorage.getItem("nordtour.tabs")) || {}; } catch { return {}; } })();
 function showView() {

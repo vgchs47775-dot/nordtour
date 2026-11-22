@@ -8,7 +8,7 @@
 
 let EXTRAS = null;
 let panoGen = 0, panoBusy = false;
-const SHOW = { pano: true, sights: true };
+const SHOW = { pano: true, sights: true, orte: true };
 
 async function loadExtras() {
   try {
@@ -145,22 +145,24 @@ function panoMapsUrl(p) {
 function renderPano() {
   const el = document.getElementById("panoCards"); if (!el || !EXTRAS) return;
   const first = p => panoDays(p)[0]?.date || "9999";
-  el.innerHTML = [...PANO()].sort((a, b) => first(a).localeCompare(first(b))).map(p => {
-    const on = isPlanned("pano", p.id);
-    return `<article class="card pano-card${on ? " on" : ""}">
+  $("#panoChips").innerHTML = prioChips("pano", prioCounts(PANO().map(p => panoPrio(p.id))));
+  el.innerHTML = [...PANO()].filter(p => prioMatch("pano", panoPrio(p.id))).sort((a, b) => first(a).localeCompare(first(b))).map(p => {
+    const on = isPlanned("pano", p.id), pr = panoPrio(p.id);
+    return `<article class="card pano-card${on ? " on" : ""}${pr ? " hasprio" : ""}"${pr ? ` style="--pc:var(--p-${pr})"` : ""}>
       ${gallery("pano:" + p.id)}
       <h3>${esc(p.name)}</h3>
       <span class="meta">${esc(p.land)} · ca. ${num(p.km)} km · ${esc(panoWhen(p))}</span>
       <span class="meta delta">${esc(panoExtraText(p))}</span>
       <p>${esc(p.desc)}</p>
       <span class="fit">${esc(p.fit)}</span>
+      ${prioButtons("pano", p.id, p.name)}
       <div class="acts">
         <button type="button" class="btn ${on ? "moss" : "ghost"} mini" data-plan="pano:${esc(p.id)}">${on ? "✓ Eingeplant" : "Einplanen"}</button>
         <button type="button" class="btn ghost mini" data-showmap="pano:${esc(p.id)}">Auf der Karte</button>
         <a class="btn go mini" href="${esc(panoMapsUrl(p))}" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>
       </div>
     </article>`;
-  }).join("");
+  }).join("") || `<p class="empty wide">Keine Panoramastraße mit dieser Priorität.</p>`;
   const n = plannedList("pano").length;
   $("#panoSum").textContent = panoBusy ? "Umwege werden live berechnet …" : n ? `${n} eingeplant` : "";
 }
@@ -183,7 +185,7 @@ function sightCard(x) {
   const on = isPlanned("sights", x.id);
   return `<article class="card sight-card${on ? " on" : ""}">
     ${gallery("sight:" + x.id)}
-    <h4>${esc(x.name)}</h4>
+    <h4>${esc(x.name)}${ortPrio("s:" + x.id) ? ` <span class="ppill" style="--pc:var(--p-${ortPrio("s:" + x.id)});--pi:var(--pi-${ortPrio("s:" + x.id)})">${PRIO_LABEL[ortPrio("s:" + x.id)]}</span>` : ""}</h4>
     <span class="meta">${esc(x.type)} · ca. ${fmtShort(x.visit)} vor Ort${x.detour ? ` · ${fmtShort(x.detour)} Umweg` : " · direkt an der Strecke"}</span>
     <p>${esc(x.desc)}</p>
     <div class="acts">
@@ -199,32 +201,37 @@ let panoLayer = null, sightLayer = null;
 const panoLines = {}, sightMarkers = {};
 function popupPano(p) {
   const on = isPlanned("pano", p.id);
-  return `<div class="pop">${gallery("pano:" + p.id)}<b>${esc(p.name)}</b><span>${esc(panoWhen(p))} · ${esc(panoExtraText(p))}</span>
+  return `<div class="pop" data-pop="pano|${esc(p.id)}">${gallery("pano:" + p.id)}<b>${esc(p.name)}</b><span>${esc(panoWhen(p))} · ${esc(panoExtraText(p))}</span>
+    ${prioButtons("pano", p.id, p.name)}
     <div class="acts"><button type="button" class="btn ${on ? "moss" : "ghost"} mini" data-plan="pano:${esc(p.id)}">${on ? "✓ Eingeplant" : "Einplanen"}</button>
     <a class="btn ghost mini" href="#panorama">Details</a></div></div>`;
 }
 function popupSight(x) {
   const on = isPlanned("sights", x.id);
-  return `<div class="pop">${gallery("sight:" + x.id)}<b>${esc(x.name)}</b><span>${esc(x.type)} · ${fmtShort(x.visit)}${x.detour ? ` + ${fmtShort(x.detour)} Umweg` : ""}</span>
+  return `<div class="pop" data-pop="sight|${esc(x.id)}">${gallery("sight:" + x.id)}<b>${esc(x.name)}</b><span>${esc(x.type)} · ${fmtShort(x.visit)}${x.detour ? ` + ${fmtShort(x.detour)} Umweg` : ""}</span>
     <span class="tipdesc">${esc(x.desc)}</span>
+    ${prioButtons("ort", "s:" + x.id, x.name)}
     <div class="acts"><button type="button" class="btn ${on ? "sight" : "ghost"} mini" data-plan="sights:${esc(x.id)}">${on ? "✓ Eingeplant" : "Einplanen"}</button></div></div>`;
 }
 function drawExtras() {
   if (!EXTRAS || !panoLayer) return;
   panoLayer.clearLayers(); sightLayer.clearLayers();
   if (SHOW.pano) for (const p of PANO()) {
-    const on = isPlanned("pano", p.id);
-    const line = L.polyline(p.geom, { pane: "panoPane", interactive: false, ...(on ? { color: "#3d7a3a", weight: 8, opacity: .55 } : { color: "#3d7a3a", weight: 3.5, opacity: .75, dashArray: "4 7" }) });
+    // Farbe nach Priorität (rot/gelb/braun), ohne Priorität grün; eingeplant = breit, sonst gestrichelt
+    const on = isPlanned("pano", p.id), pr = panoPrio(p.id), color = pr ? prioColor(pr) : "#3d7a3a";
+    if (pr) L.polyline(p.geom, { pane: "panoPane", interactive: false, color: isDark() ? "#0e171d" : "#3a2a1a", weight: on ? 16 : 6.5, opacity: .4 }).addTo(panoLayer);   // dunkler Rand, damit Gelb lesbar bleibt
+    const line = L.polyline(p.geom, { pane: "panoPane", interactive: false, color, ...(on ? { weight: pr ? 13 : 8, opacity: pr ? 1 : .55 } : { weight: pr ? 4.5 : 3.5, opacity: pr ? 1 : .75, dashArray: "4 7" }) });
     const hit = L.polyline(p.geom, { pane: "panoPane", color: "#000", opacity: 0, weight: 16, bubblingMouseEvents: false });
     hit.bindPopup(() => popupPano(p), { maxWidth: 300, minWidth: 240 });
-    hit.bindTooltip(esc(p.name), { sticky: true });
+    hit.bindTooltip(esc(p.name) + (pr ? " · " + PRIO_LABEL[pr] : ""), { sticky: true });
     line.addTo(panoLayer); hit.addTo(panoLayer); panoLines[p.id] = hit;
   }
   if (SHOW.sights) for (const x of SIGHTS()) {
     const on = isPlanned("sights", x.id);
-    const m = L.marker([x.lat, x.lon], { icon: L.divIcon({ className: "", html: `<div class="smk${on ? " on" : ""}"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] }), riseOnHover: true });
+    const c = ortMapColor("s:" + x.id), pr = ortPrio("s:" + x.id);
+    const m = L.marker([x.lat, x.lon], { icon: L.divIcon({ className: "", html: `<div class="smk${on ? " on" : ""}${c ? " prio" : ""}"${c ? ` style="--pc:${c}"` : ""}></div>`, iconSize: [16, 16], iconAnchor: [8, 8] }), riseOnHover: true });
     m.bindPopup(() => popupSight(x), { maxWidth: 300, minWidth: 240 });
-    m.bindTooltip(esc(x.name), { direction: "top", offset: [0, -8] });
+    m.bindTooltip(esc(x.name) + (c ? " · " + PRIO_LABEL[pr] : ""), { direction: "top", offset: [0, -8] });
     m.addTo(sightLayer); sightMarkers[x.id] = m;
   }
 }
@@ -232,7 +239,8 @@ function showOnMap(key) {
   const [k, id] = key.split(":");
   location.hash = "#route";
   setTimeout(() => {
-    map.invalidateSize();
+    if (matchMedia("(max-width: 860px)").matches) setMapList("map");      // iPad hochkant: von der Liste zur Karte
+    map.invalidateSize(); pendingFit = false;
     if (k === "pano") {
       const p = PANO().find(x => x.id === id); if (!p) return;
       if (!SHOW.pano) { SHOW.pano = true; syncMapButtons(); drawExtras(); }
@@ -257,6 +265,7 @@ function syncMapButtons() {
 function renderExtras() {
   if (!EXTRAS) return;
   renderPano(); renderSights(); drawExtras();
+  renderOrte(); drawOrte();
   $("#nPano").textContent = plannedList("pano").length;
   $("#nSights").textContent = plannedList("sights").length;
 }
@@ -269,7 +278,8 @@ window.addEventListener("DOMContentLoaded", () => {
     onAdd() {
       const div = L.DomUtil.create("div", "leaflet-bar map-layers");
       div.innerHTML = `<button type="button" data-maplayer="pano" aria-pressed="true" title="Panoramastraßen ein-/ausblenden">P</button>` +
-        `<button type="button" data-maplayer="sights" aria-pressed="true" title="Sehenswürdigkeiten ein-/ausblenden">S</button>`;
+        `<button type="button" data-maplayer="sights" aria-pressed="true" title="Sehenswürdigkeiten ein-/ausblenden">S</button>` +
+        `<button type="button" data-maplayer="orte" aria-pressed="true" title="Prioritäten der Orte ein-/ausblenden">O</button>`;
       L.DomEvent.disableClickPropagation(div);
       return div;
     }
@@ -284,7 +294,7 @@ window.addEventListener("DOMContentLoaded", () => {
     const gn = e.target.closest("[data-galnav]");
     if (gn) { galStep(gn.closest(".gal"), +gn.dataset.galnav); return; }
     const ml = e.target.closest("[data-maplayer]");
-    if (ml) { SHOW[ml.dataset.maplayer] = !SHOW[ml.dataset.maplayer]; syncMapButtons(); drawExtras(); }
+    if (ml) { SHOW[ml.dataset.maplayer] = !SHOW[ml.dataset.maplayer]; syncMapButtons(); if (ml.dataset.maplayer === "orte") { drawMarkers(); drawOrte(); } drawExtras(); }
   });
   $("#sightOnly").addEventListener("change", renderSights);
   window.addEventListener("hashchange", () => { if (location.hash === "#panorama") ensurePanoRoutes(); });

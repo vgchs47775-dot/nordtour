@@ -248,7 +248,7 @@ async function reverseName(lat, lon) {
 }
 
 /* ================= Karte ================= */
-const map = L.map("map", { zoomSnap: 0.5 });
+const map = L.map("map", { zoomSnap: 0.5 }).setView([63.5, 15], 4);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   // crossOrigin: Kacheln als CORS-Antwort laden, damit der Service Worker sie platzsparend cachen kann
   maxZoom: 18, crossOrigin: "", attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -256,16 +256,16 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
 const routeLayer = L.layerGroup().addTo(map);
 const markerLayer = L.layerGroup().addTo(map);
 let markers = {};
+let pendingFit = false;      // ganze Route zeigen, sobald die Karte sichtbar ist
 // Im Dunkelmodus wird die Karte per CSS abgedunkelt (style.css) – dann helle Linienfarben.
-const darkMQ = matchMedia("(prefers-color-scheme: dark)");
 const COL = {
-  get route() { return darkMQ.matches ? "#8ecae6" : "#1f4e63"; }, sel: "#f0913f", ferry: "#f0913f",
-  get todo() { return darkMQ.matches ? "#91a5b0" : "#5a6d78"; }
+  get route() { return isDark() ? "#8ecae6" : "#1f4e63"; }, sel: "#f0913f", ferry: "#f0913f",
+  get todo() { return isDark() ? "#91a5b0" : "#5a6d78"; }
 };
-darkMQ.addEventListener?.("change", () => drawRoutes());
+window.addEventListener("themechange", () => { if (state) drawRoutes(); });
 // Leaflet misst die Kartengröße nur beim Start; bei jeder Größenänderung neu messen,
 // sonst werden Linien außerhalb des alten Ausschnitts abgeschnitten.
-new ResizeObserver(() => map.invalidateSize()).observe(document.getElementById("map"));
+new ResizeObserver(() => { map.invalidateSize(); if (pendingFit) fitAll(); }).observe(document.getElementById("map"));
 
 function drawRoutes() {
   routeLayer.clearLayers();
@@ -293,7 +293,7 @@ function drawRoutes() {
     }
   });
 }
-function icon(txt, cls) { return L.divIcon({ className: "", html: `<div class="nmk ${cls}">${esc(txt)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }); }
+function icon(txt, cls, style = "") { return L.divIcon({ className: "", html: `<div class="nmk ${cls}"${style ? ` style="${style}"` : ""}>${esc(txt)}</div>`, iconSize: [26, 26], iconAnchor: [13, 13] }); }
 function drawMarkers() {
   markerLayer.clearLayers(); markers = {};
   const h = home();
@@ -301,8 +301,10 @@ function drawMarkers() {
     .bindTooltip(`${esc(h.name)} – Start`, { className: "mtip" }).addTo(markerLayer);
   sortedDays().forEach((d, i) => {
     if (!hasPos(d) || d.night === "zu Hause") return;
-    const m = L.marker([d.lat, d.lon], { icon: icon(i + 1, d.id === selDay ? "sel" : ""), draggable: !!window.mapEdit, title: d.night, riseOnHover: true });
-    m.bindTooltip(`${i + 1}. ${esc(d.night)}`, { className: "mtip", direction: "top", offset: [0, -12] });
+    // Farbe nach Priorität des Ortes (prio.js)
+    const pc = typeof nightMapColor === "function" ? nightMapColor(d) : null;
+    const m = L.marker([d.lat, d.lon], { icon: icon(i + 1, (d.id === selDay ? "sel" : "") + (pc ? " prio" : ""), pc ? `--pc:${pc};--pi:${prioInk("o:" + ortSlug(d.night))}` : ""), draggable: !!window.mapEdit, title: d.night, riseOnHover: true });
+    m.bindTooltip(`${i + 1}. ${esc(d.night)}${pc ? " · " + PRIO_LABEL[ortPrio("o:" + ortSlug(d.night))] : ""}`, { className: "mtip", direction: "top", offset: [0, -12] });
     m.on("click", () => selectDay(d.id, false));
     m.on("dragend", e => moveNight(d.id, e.target.getLatLng()));
     m.addTo(markerLayer); markers[d.id] = m;
@@ -311,6 +313,10 @@ function drawMarkers() {
   if (typeof drawOsm === "function") drawOsm();              // Tankstellen & Wasser des gewählten Tages (osm.js)
 }
 function fitAll() {
+  // Karte ausgeblendet (anderer Reiter, iPad-Liste)? Dann erst einpassen, wenn sie sichtbar wird
+  map.invalidateSize();
+  if (!map.getSize().x || !map.getSize().y) { pendingFit = true; return; }
+  pendingFit = false;
   const b = L.latLngBounds([[home().lat, home().lon]]);
   state.days.filter(hasPos).forEach(d => b.extend([d.lat, d.lon]));
   map.fitBounds(b, { padding: [20, 20] });
@@ -321,6 +327,7 @@ function zoomToDay(id, tries = 0) {
   if (!map.getSize().x) { if (tries < 20) setTimeout(() => zoomToDay(id, tries + 1), 50); return; }
   const list = sortedDays(), i = list.findIndex(x => x.id === id); if (i < 0) return;
   const pts = dayPoints(list[i], i, list); if (!pts.length) return;
+  pendingFit = false;
   const r = routes[routeKey(pts)];
   const b = L.latLngBounds(pts.map(p => [p.lat, p.lon]));
   if (r) r.parts.forEach(p => (p.ferry ? p.pts : decodePolyline(p.enc)).forEach(x => b.extend(x)));

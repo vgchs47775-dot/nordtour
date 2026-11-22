@@ -28,6 +28,7 @@ const VIEWS = {
   route: "#days .day",
   panorama: ".pano-card",
   erleben: "#sightList",
+  orte: "#ortList .ortrow",
   himmel: "#skyTable tbody tr",
   tagebuch: ".jday",
   kosten: "#costGroups .group",

@@ -187,6 +187,7 @@ function setMapList(mode) {
   document.querySelectorAll("[data-ml]").forEach(b => b.setAttribute("aria-pressed", b.dataset.ml === mode ? "true" : "false"));
   try { localStorage.setItem("nordtour.ml", mode); } catch { /* egal */ }
   map.invalidateSize();                        // Größe sofort neu messen (Karte war evtl. ausgeblendet)
+  if (mode === "map" && pendingFit) fitAll();
   renderMapDay();
 }
 // Kleine Infokarte unten auf der Karte für den gewählten Tag (nur in der Kartenansicht am iPad)

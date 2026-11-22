@@ -23,7 +23,7 @@ klassische Skripte in `app/`, die sich den globalen Gültigkeitsbereich teilen.
 
 ## Aufbau
 Ladereihenfolge (siehe Ende von `app/index.html`):
-`config → extras → app → stops → osm → toll → ferrycost → ferries → lists → sky → aurora → journal → sync → cache → backup → pwa`
+`config → extras → app → stops → osm → toll → ferrycost → ferries → lists → prio → sky → aurora → journal → sync → cache → backup → pwa`
 
 | Datei | Aufgabe |
 |---|---|
@@ -33,6 +33,8 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `osm.js` | Tankstellen und Trinkwasser (Overpass) |
 | `toll.js`, `ferrycost.js`, `ferries.js` | Maut-Schätzung, Fährkosten-Abgleich, Abfahrten (Entur, nur Norwegen) |
 | `lists.js` | Reiter, Kosten, To-dos, Packliste, Kaufen, `normalizeState()` für Datenumstellungen |
+| `theme.js` (im `<head>`) | Hell/Dunkel/Auto; CSS nur über `:root[data-theme="dark"]`, in JS `isDark()` und Ereignis `themechange` |
+| `prio.js` | Prioritäten für Panoramastraßen und Orte, Kartenfarben (`PRIO_COLORS`) |
 | `sky.js`, `aurora.js` | Nachthimmel, Kp-Prognose, Polarlicht-Karte (NOAA) |
 | `journal.js` | Tagebuch; Fotos im privaten Supabase-Bucket `tagebuch`, Warteschlange in IndexedDB |
 | `sync.js`, `cache.js`, `backup.js` | Cloud-Abgleich (`trips`), geteilter Zwischenspeicher (`route_cache`), Sicherungen (`trip_backups`) |
