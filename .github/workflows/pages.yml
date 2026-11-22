@@ -47,7 +47,7 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url || steps.deployment2.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/configure-pages@v6
@@ -57,5 +57,13 @@ jobs:
       - uses: actions/upload-pages-artifact@v5
         with:
           path: app
+      # GitHub findet das gerade hochgeladene Paket manchmal erst nach einer Weile → zweiter Versuch
       - id: deployment
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+      - name: Kurz warten
+        if: steps.deployment.outcome == 'failure'
+        run: sleep 60
+      - id: deployment2
+        if: steps.deployment.outcome == 'failure'
         uses: actions/deploy-pages@v5
