@@ -1,18 +1,20 @@
-# Veröffentlicht den Ordner app/ bei jedem Push auf main über GitHub Pages.
+# Push auf main: Selbsttest, dann Veröffentlichung von app/ über GitHub Pages.
+# Pull Request: nur der Selbsttest (z. B. für Änderungen aus Cloud-Sitzungen), es wird nichts veröffentlicht.
 name: Seite veröffentlichen
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
+# je Zweig eine Gruppe – ein Pull Request darf keine laufende Veröffentlichung abbrechen
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -37,7 +39,12 @@ jobs:
 
   deploy:
     needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
