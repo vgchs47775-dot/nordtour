@@ -46,7 +46,7 @@ document.addEventListener("click", e => {
 });
 document.addEventListener("change", e => {
   const p = e.target.closest("[data-person]"), m = e.target.closest("[data-priomix]");
-  if (p) { const n = [...persons()]; n[+p.dataset.person] = p.value.trim() || `Person ${+p.dataset.person + 1}`; state.settings.persons = n; save(); p.blur(); renderWho(); redrawPrio(); }
+  if (p) { const n = [...persons()]; n[+p.dataset.person] = p.value.trim() || `Person ${+p.dataset.person + 1}`; state.settings.persons = n; save(); p.blur(); renderWho(); redrawPrio(); renderLists(); }
   if (m) { state.settings.prioMix = m.value; save(); m.blur(); redrawPrio(); }
 });
 

@@ -231,8 +231,10 @@
   <section id="v-todos" hidden aria-labelledby="h-todo">
     <div class="toolbar">
       <h2 id="h-todo">Vor der Abfahrt erledigen</h2>
-      <label class="toggle"><input type="checkbox" id="todoOpen"> Nur Offenes zeigen</label>
+      <div class="acts"><label class="toggle"><input type="checkbox" id="todoOpen"> Nur Offenes zeigen</label>
+        <label class="toggle">Sortieren<select id="todoSort"><option value="">nach Datum</option><option value="who">nach Person</option></select></label></div>
     </div>
+    <details class="persnames"><summary>Personen umbenennen</summary><div class="two"><label class="lbl">Person 1<input type="text" maxlength="30" data-person="0"></label><label class="lbl">Person 2<input type="text" maxlength="30" data-person="1"></label></div><p class="hint">Gilt überall in der App, auch bei den Prioritäten.</p></details>
     <div class="chips" id="todoChips" role="group" aria-label="Nach Kategorie filtern"></div>
     <div class="group"><div id="todoRows"></div></div>
     <form class="add" id="addTodo" autocomplete="off">
@@ -241,6 +243,7 @@
         <label class="lbl" for="tDue">Bis wann?<input type="date" id="tDue"></label>
         <label class="lbl" for="tPrio">Priorität<select id="tPrio"></select></label>
         <label class="lbl" for="tCat" id="tCatLbl" hidden>Kategorie<select id="tCat"></select></label>
+        <label class="lbl" for="tWho">Wer?<select id="tWho"></select></label>
         <button class="btn" type="submit">Hinzufügen</button>
       </div>
       <p class="formerr" id="tErr"></p>
@@ -273,8 +276,10 @@
   <section id="v-kaufen" hidden aria-labelledby="h-buy">
     <div class="toolbar">
       <h2 id="h-buy">Anschaffen</h2>
-      <span class="toggle" id="buySum"></span>
+      <div class="acts"><span class="toggle" id="buySum"></span>
+        <label class="toggle">Sortieren<select id="buySort"><option value="">nach Priorität</option><option value="who">nach Person</option></select></label></div>
     </div>
+    <details class="persnames"><summary>Personen umbenennen</summary><div class="two"><label class="lbl">Person 1<input type="text" maxlength="30" data-person="0"></label><label class="lbl">Person 2<input type="text" maxlength="30" data-person="1"></label></div><p class="hint">Gilt überall in der App, auch bei den Prioritäten.</p></details>
     <div id="buyOpen" class="cards"></div>
     <h3 class="subhead" id="buyDoneHead" hidden>Schon gekauft</h3>
     <div id="buyDone" class="cards"></div>
@@ -287,7 +292,7 @@
       </div>
       <div class="fields">
         <label class="lbl" for="bLink">Shop-Link<input type="url" id="bLink" placeholder="https://…"></label>
-        <span></span>
+        <label class="lbl" for="bWho">Wer?<select id="bWho"></select></label>
         <button class="btn" type="submit">Hinzufügen</button>
       </div>
       <p class="formerr" id="bErr"></p>

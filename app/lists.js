@@ -61,7 +61,28 @@ function commit() { save(); renderLists(); }
 
 /* ================= Zeilen bearbeiten (Kosten, To-dos, Packliste) ================= */
 const rowBusy = () => editingRow && document.activeElement?.closest("form[data-rowsave]") && document.activeElement.matches("input, select");
-const pills = t => (t.prio || t.cat) ? `<span class="pills">${t.prio ? `<span class="pill"${pcStyle(t.prio)}>${esc(t.prio)}</span>` : ""}${t.cat ? `<span class="pill"><i class="pdot" style="background:${todoCats().find(c => c.name === t.cat)?.color || "var(--muted)"}"></i> ${esc(t.cat)}</span>` : ""}</span>` : "";
+/* ---------- Person bei To-dos und Kaufen: t.who = "p1" | "p2" | "both" (fehlt = niemand); Namen über persons() (prio.js) ---------- */
+const WHO = ["p1", "p2", "both"];
+const whoName = w => w === "both" ? "beide" : w === "p1" || w === "p2" ? persons()[w === "p1" ? 0 : 1] : "";
+const whoOpts = sel => `<option value="">– niemand –</option>` + WHO.map(w => `<option value="${w}"${w === sel ? " selected" : ""}>${esc(whoName(w))}</option>`).join("");
+const whoPill = t => WHO.includes(t.who) ? `<span class="pill who">👤 ${esc(whoName(t.who))}</span>` : "";
+const listSort = k => { try { return localStorage.getItem("nordtour.sort." + k) || ""; } catch { return ""; } };
+// Liste nach Person gruppieren (Reihenfolge: Person 1, Person 2, beide, niemand); innerhalb bleibt die bisherige Sortierung
+function byWho(list, html, empty) {
+  const groups = [...WHO, ""].map(w => [w, list.filter(t => (WHO.includes(t.who) ? t.who : "") === w)]).filter(g => g[1].length);
+  return groups.map(([w, l]) => `<h3 class="subhead whohead">${w ? `👤 ${esc(whoName(w))}` : "Niemand zugeordnet"} <small>${l.length}</small></h3>${l.map(html).join("")}`).join("") || empty;
+}
+function renderPersonNames() {
+  for (const el of document.querySelectorAll(".persnames [data-person]")) if (document.activeElement !== el) el.value = persons()[+el.dataset.person];
+  for (const k of ["todos", "buy"]) { const s = document.getElementById(k === "todos" ? "todoSort" : "buySort"); if (s && document.activeElement !== s) s.value = listSort(k); }
+  for (const id of ["#tWho", "#bWho"]) { const s = $(id), sig = JSON.stringify(persons()); if (s._sig !== sig) { const v = s.value; s._sig = sig; s.innerHTML = whoOpts(v); } }
+}
+document.addEventListener("change", e => {
+  const s = e.target.closest("#todoSort, #buySort"); if (!s) return;
+  try { localStorage.setItem("nordtour.sort." + (s.id === "todoSort" ? "todos" : "buy"), s.value); } catch { /* egal */ }
+  s.blur(); s.id === "todoSort" ? renderTodos() : renderBuy();
+});
+const pills = t => (t.prio || t.cat || WHO.includes(t.who)) ? `<span class="pills">${whoPill(t)}${t.prio ? `<span class="pill"${pcStyle(t.prio)}>${esc(t.prio)}</span>` : ""}${t.cat ? `<span class="pill"><i class="pdot" style="background:${todoCats().find(c => c.name === t.cat)?.color || "var(--muted)"}"></i> ${esc(t.cat)}</span>` : ""}</span>` : "";
 function rowActs(kind, it, label) {
   const key = `${kind}:${it.id}`;
   let h = `<span class="rowacts"><button type="button" class="del" data-rowedit="${esc(key)}" aria-label="${esc(label)} bearbeiten">✎</button>${rmBtn(kind, it.id, label)}</span>`;
@@ -70,7 +91,7 @@ function rowActs(kind, it, label) {
   const sel = (n, l, list, none) => `<label class="lbl">${l}<select name="${n}">${nameOpts(list, v[n], none)}</select></label>`;
   const f = kind === "costs" ? txt("title", "Name", 80) + sel("cat", "Kategorie", costCats())
       + `<label class="lbl">Tag<select name="dayId"><option value="">– kein Tag –</option>${sortedDays().map(d => `<option value="${esc(d.id)}"${d.id === v.dayId ? " selected" : ""}>${fmtDate(d.date)} · ${esc(d.night || d.title)}</option>`).join("")}</select></label>` + txt("note", "Notiz", 200)
-    : kind === "todos" ? txt("title", "Aufgabe", 120) + `<label class="lbl">Bis wann?<input type="date" name="due" value="${esc(v.due || "")}"></label>` + sel("prio", "Priorität", listPrios(), "– ohne –") + (todoCats().length ? sel("cat", "Kategorie", todoCats(), "– ohne –") : "") + txt("note", "Notiz", 200)
+    : kind === "todos" ? txt("title", "Aufgabe", 120) + `<label class="lbl">Bis wann?<input type="date" name="due" value="${esc(v.due || "")}"></label>` + sel("prio", "Priorität", listPrios(), "– ohne –") + (todoCats().length ? sel("cat", "Kategorie", todoCats(), "– ohne –") : "") + `<label class="lbl">Wer?<select name="who">${whoOpts(v.who)}</select></label>` + txt("note", "Notiz", 200)
     : txt("name", "Gegenstand", 80) + txt("qty", "Menge", 12) + sel("cat", "Kategorie", packCats()) + txt("note", "Notiz", 200);
   return h + `<form class="edit rowedit" data-rowsave="${esc(key)}" autocomplete="off"><div class="two">${f}</div><p class="formerr" data-err></p>
     <div class="acts"><button class="btn mini" type="submit">Speichern</button><button class="btn ghost mini" type="button" data-rowcancel>Abbrechen</button></div></form>`;
@@ -94,7 +115,7 @@ document.addEventListener("submit", e => {
   for (const [k, v] of Object.entries(o)) {
     if (kind === "pack" && k === "qty") it.qty = v || "1";
     else if (v) it[k] = v;
-    else if (k === "prio" || (k === "cat" && kind === "todos")) delete it[k];
+    else if (k === "prio" || k === "who" || (k === "cat" && kind === "todos")) delete it[k];
     else if (it[k] != null && k !== "cat") it[k] = null;
   }
   editingRow = null; rowDraft = {}; document.activeElement?.blur();
@@ -250,7 +271,7 @@ function renderTodos() {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const list = [...state.todos].sort((a, b) => (a.done - b.done) || String(a.due || "9999").localeCompare(String(b.due || "9999")) || listPrioRank(a.prio) - listPrioRank(b.prio))
     .filter(t => (!onlyOpen || !t.done) && (!todoFilter || t.cat === todoFilter));
-  $("#todoRows").innerHTML = list.length ? list.map(t => {
+  const row = t => {
     let cls = "", label = "";
     if (t.due) {
       const d = new Date(t.due + "T12:00:00"), diff = Math.floor((d - today) / 864e5);
@@ -264,7 +285,8 @@ function renderTodos() {
       <span class="due ${cls}">${esc(label)}</span>
       ${rowActs("todos", t, t.title)}
     </div>`;
-  }).join("") : `<p class="empty flat">${state.todos.length ? (todoFilter ? "Nichts in dieser Kategorie." : "Alles erledigt!") : "Noch keine Aufgaben."}</p>`;
+  };
+  $("#todoRows").innerHTML = list.length ? (listSort("todos") === "who" ? byWho(list, row, "") : list.map(row).join("")) : `<p class="empty flat">${state.todos.length ? (todoFilter ? "Nichts in dieser Kategorie." : "Alles erledigt!") : "Noch keine Aufgaben."}</p>`;
 }
 $("#todoOpen").addEventListener("change", renderTodos);
 document.addEventListener("click", e => { const b = e.target.closest("[data-todofilter]"); if (b) { todoFilter = b.dataset.todofilter; renderTodos(); } });
@@ -309,7 +331,9 @@ function renderBuy() {
   if (editingBuy && document.activeElement?.closest("form[data-buysave]")) return;
   const sort = (a, b) => listPrioRank(a.prio) - listPrioRank(b.prio);
   const open = state.buy.filter(i => !i.done).sort(sort), done = state.buy.filter(i => i.done).sort(sort);
-  $("#buyOpen").innerHTML = open.length ? open.map(buyCard).join("") : `<p class="empty wide">Nichts mehr offen.</p>`;
+  const who = listSort("buy") === "who";
+  $("#buyOpen").innerHTML = open.length ? (who ? byWho(open, buyCard, "") : open.map(buyCard).join("")) : `<p class="empty wide">Nichts mehr offen.</p>`;
+  $("#buyOpen").classList.toggle("bywho", who);
   $("#buyDone").innerHTML = done.map(buyCard).join("");
   $("#buyDoneHead").hidden = !done.length;
   const tot = state.buy.reduce((a, i) => a + (Number(i.price) || 0), 0), spent = done.reduce((a, i) => a + (Number(i.price) || 0), 0);
@@ -325,7 +349,7 @@ function buyCard(i) {
   let h = `<article class="card bcard${i.done ? " bought" : ""}"${pcStyle(i.prio)}>
     <div class="hd">${chk("buy", i.id, i.done, i.name + " gekauft")}
       <span class="nm">${esc(i.name)}${i.note ? `<span class="nt">${esc(i.note)}</span>` : ""}</span>${price}</div>
-    <div class="pills"><label class="prio-sel pill"${pcStyle(i.prio)}><span class="sr">Priorität für ${esc(i.name)}</span><select data-prio="${esc(i.id)}">${prioOpts(i.prio)}</select></label>${i.cat ? `<span class="pill">${catColor(i.cat) ? `<i class="pdot" style="background:${catColor(i.cat)}"></i> ` : ""}${esc(i.cat)}</span>` : ""}${i.done ? `<span class="pill ok">Gekauft</span>` : ""}</div>
+    <div class="pills"><label class="prio-sel pill"${pcStyle(i.prio)}><span class="sr">Priorität für ${esc(i.name)}</span><select data-prio="${esc(i.id)}">${prioOpts(i.prio)}</select></label>${whoPill(i)}${i.cat ? `<span class="pill">${catColor(i.cat) ? `<i class="pdot" style="background:${catColor(i.cat)}"></i> ` : ""}${esc(i.cat)}</span>` : ""}${i.done ? `<span class="pill ok">Gekauft</span>` : ""}</div>
     <div class="acts">
       ${url ? `<a class="shop" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Zum Shop ↗ <small>${esc(host(url))}</small></a>` : `<span class="nolink">Noch kein Shop-Link</span>`}
       <button type="button" class="btn ghost mini" data-buyedit="${esc(i.id)}">Bearbeiten</button>
@@ -339,7 +363,8 @@ function buyCard(i) {
         <label class="lbl">Priorität<select name="prio">${prioOpts(i.prio)}</select></label>
         <label class="lbl">Preis (€)<input type="number" name="price" min="0" step="0.01" value="${Number(i.price) || ""}"></label>
       </div>
-      <label class="lbl">Kategorie<select name="cat">${nameOpts(packCats(), i.cat)}</select></label>
+      <div class="two"><label class="lbl">Kategorie<select name="cat">${nameOpts(packCats(), i.cat)}</select></label>
+      <label class="lbl">Wer?<select name="who">${whoOpts(i.who)}</select></label></div>
       <label class="lbl">Shop-Link<input type="url" name="link" value="${esc(i.link || "")}" placeholder="https://…"></label>
       <label class="lbl">Notiz<input type="text" name="note" maxlength="140" value="${esc(i.note || "")}"></label>
       <p class="formerr" data-err></p>
@@ -356,6 +381,7 @@ $("#v-kaufen").addEventListener("submit", e => {
   if (!name) { f.querySelector("[data-err]").textContent = "Der Name fehlt."; return; }
   if (link && !safeUrl(link)) { f.querySelector("[data-err]").textContent = "Der Link muss mit https:// beginnen."; return; }
   Object.assign(i, { name, prio: el.prio.value, cat: el.cat.value, price: isFinite(price) ? price : null, link: link || null, note: el.note.value.trim() || null });
+  if (el.who.value) i.who = el.who.value; else delete i.who;
   editingBuy = null; document.activeElement?.blur(); commit();
 });
 
@@ -411,7 +437,7 @@ addForm("#addCost", "#kErr", () => {
 addForm("#addTodo", "#tErr", () => {
   const title = $("#tTitle").value.trim();
   if (!title) return "Gib eine Aufgabe ein.";
-  return { push: () => state.todos.push({ id: nid("t"), title, due: $("#tDue").value || null, done: false, ...($("#tCat").value ? { cat: $("#tCat").value } : {}), ...($("#tPrio").value ? { prio: $("#tPrio").value } : {}) }),
+  return { push: () => state.todos.push({ id: nid("t"), title, due: $("#tDue").value || null, done: false, ...($("#tCat").value ? { cat: $("#tCat").value } : {}), ...($("#tPrio").value ? { prio: $("#tPrio").value } : {}), ...($("#tWho").value ? { who: $("#tWho").value } : {}) }),
     reset: () => { $("#tTitle").value = ""; $("#tDue").value = ""; } };
 });
 addForm("#addPack", "#pErr", () => {
@@ -425,7 +451,7 @@ addForm("#addBuy", "#bErr", () => {
   const name = $("#bName").value.trim(), link = $("#bLink").value.trim(), price = parseFloat($("#bPrice").value);
   if (!name) return "Gib ein, was du kaufen willst.";
   if (link && !safeUrl(link)) return "Der Link muss mit https:// beginnen.";
-  return { push: () => state.buy.push({ id: nid("b"), name, prio: $("#bPrio").value, price: isFinite(price) ? price : null, link: link || null, cat: $("#bCat").value, note: null, done: false }),
+  return { push: () => state.buy.push({ id: nid("b"), name, prio: $("#bPrio").value, price: isFinite(price) ? price : null, link: link || null, cat: $("#bCat").value, note: null, done: false, ...($("#bWho").value ? { who: $("#bWho").value } : {}) }),
     reset: () => { $("#bName").value = ""; $("#bLink").value = ""; $("#bPrice").value = ""; } };
 });
 // Auswahlfelder der Formulare; nur neu füllen, wenn sich etwas geändert hat (sonst schließt sich eine offene Auswahl)
@@ -436,6 +462,7 @@ function fillSelect(sel, list, none, dflt) {
 }
 function fillSelects() {
   fillSelect("#pCat", packCats()); fillSelect("#bCat", packCats()); fillSelect("#kCat", costCats());
+  renderPersonNames();
   fillSelect("#tCat", todoCats(), "– ohne –"); fillSelect("#tPrio", listPrios(), "– ohne –"); fillSelect("#bPrio", listPrios(), null, "Sollte");
 }
 

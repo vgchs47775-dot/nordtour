@@ -32,7 +32,7 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `stops.js` | Tage sortieren, Ruhetag, Stopps, Bearbeiten-Modus der Karte, Umschalter Karte/Liste |
 | `osm.js` | Tankstellen und Trinkwasser (Overpass) |
 | `toll.js`, `ferrycost.js`, `ferries.js` | Maut-Schätzung, Fährkosten-Abgleich, Abfahrten (Entur, nur Norwegen) |
-| `lists.js` | Reiter, Kosten, To-dos, Packliste, Kaufen, `normalizeState()` für Datenumstellungen |
+| `lists.js` | Reiter, Kosten, To-dos, Packliste, Kaufen, `normalizeState()` für Datenumstellungen; Person an To-dos/Kaufen `who` = p1/p2/both, Sortierung je Gerät |
 | `einstellungen.js` | Reiter Kategorien und Prioritäten; Vorgaben in `CFG_DEFAULT`/`defaultLevels()`, eigene in `state.settings.cfg` |
 | `theme.js` (im `<head>`) | Hell/Dunkel/Auto; CSS nur über `:root[data-theme="dark"]`, in JS `isDark()` und Ereignis `themechange` |
 | `prio.js` | Prioritäten für Panoramastraßen und Orte, Kartenfarben; zwei Personen (`*_prio2`, `prio2`, `settings.persons`, `settings.prioMix`), lesen immer über `panoPrio()`/`ortPrio()` (gemeinsames Ergebnis) bzw. `prioOf()` |
