@@ -4,7 +4,11 @@
    Schlüssel eines Ortes: "o:<Name>" (Übernachtung oder Stopp – gleicher Name = gleicher Ort),
    "s:<ID>" (Ziel aus „Erleben“), "p:<ID>" (eigener Ort).
    Die Stufen selbst (Name, Farbe, Regel) stehen in einstellungen.js; gespeichert wird ihre ID.
-   Nochmaliges Antippen einer Stufe nimmt sie wieder weg. Wird nach lists.js geladen. */
+   Nochmaliges Antippen einer Stufe nimmt sie wieder weg. Wird nach lists.js geladen.
+   Zwei Personen: Person 1 wie oben, Person 2 in pano_prio2 / ort_prio2 / places[].prio2. Wer auf diesem Gerät
+   priorisiert, steht in localStorage „nordtour.who“. Namen in settings.persons, Zusammenführung in settings.prioMix:
+   max = die wichtigere Stufe zählt (Vorgabe), min = die weniger wichtige, mid = die Mitte. Hat nur eine Person etwas
+   gesetzt, zählt ihre Stufe. panoPrio()/ortPrio() liefern immer das Ergebnis für beide. */
 "use strict";
 
 // Farben für Karte (Leaflet) und Seite (CSS-Variablen --p-<ID>, --pi-<ID> = Schrift darauf)
@@ -20,25 +24,58 @@ function renderPrioTexts() {
   $("#prioLegend").innerHTML = prioLevels().map(l => `<span class="pp" style="--pc:var(--p-${l.id})">${esc(l.name)}</span>`).join("");
   $("#panoLegend").innerHTML = leg("pano"); $("#ortLegend").innerHTML = leg("ort");
   const s = $("#oPrio"), sig = JSON.stringify(prioLevels("ort").map(l => [l.id, l.name])), cur = s.value;
+  renderWho();
   if (s._sig !== sig) { s._sig = sig; s.innerHTML = `<option value="">ohne</option>` + prioLevels("ort").map(l => `<option value="${l.id}"${l.id === cur ? " selected" : ""}>${esc(l.name)}</option>`).join(""); }
 }
 
+// Wer priorisiert gerade? (Umschalter in den Reitern Orte und Panoramastraßen) und Einstellungen dazu
+function renderWho() {
+  const n = persons(), h = `<span class="lbl">Priorisieren als</span><span class="seg">${n.map((x, i) => `<button type="button" data-who="${i}" aria-pressed="${prioWho === i}">${esc(x)}</button>`).join("")}</span>`;
+  for (const id of ["whoPano", "whoOrt"]) { const el = document.getElementById(id); if (el) el.innerHTML = h; }
+  const box = document.getElementById("cfgPersons"); if (!box || box.contains(document.activeElement)) return;
+  const mix = state?.settings?.prioMix || "max";
+  box.innerHTML = `<h3>Zwei Personen</h3><p class="hint">Jede Person setzt ihre eigenen Prioritäten für Orte und Panoramastraßen (Umschalter „Priorisieren als“ in den Reitern). Karte, Filter und „Route aus Prioritäten“ benutzen das gemeinsame Ergebnis.</p>
+    <div class="two"><label class="lbl">Person 1<input type="text" maxlength="30" data-person="0" value="${esc(n[0])}"></label><label class="lbl">Person 2<input type="text" maxlength="30" data-person="1" value="${esc(n[1])}"></label></div>
+    <label class="lbl">Wenn ihr verschieden priorisiert<select data-priomix>${[["max", "zählt die wichtigere Stufe"], ["min", "zählt die weniger wichtige Stufe"], ["mid", "zählt die Mitte (bei Gleichstand die wichtigere)"]].map(([v, l]) => `<option value="${v}"${v === mix ? " selected" : ""}>${l}</option>`).join("")}</select></label>
+    <p class="hint">Hat nur eine Person etwas gesetzt, zählt ihre Stufe.</p>`;
+}
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-who]"); if (!b) return;
+  prioWho = +b.dataset.who; try { localStorage.setItem("nordtour.who", String(prioWho)); } catch { /* egal */ }
+  renderWho(); redrawPrio();
+});
+document.addEventListener("change", e => {
+  const p = e.target.closest("[data-person]"), m = e.target.closest("[data-priomix]");
+  if (p) { const n = [...persons()]; n[+p.dataset.person] = p.value.trim() || `Person ${+p.dataset.person + 1}`; state.settings.persons = n; save(); p.blur(); renderWho(); redrawPrio(); }
+  if (m) { state.settings.prioMix = m.value; save(); m.blur(); redrawPrio(); }
+});
+
 // Stufen, die es nicht (mehr) gibt oder die dort nicht gelten, zählen wie „ohne“
 const validPrio = (kind, p) => p && prioLevel(p)?.[kind] ? p : null;
-const panoPrio = id => validPrio("pano", state?.settings?.pano_prio?.[id]);
-const ortSlug = name => nightBase(name).trim().toLowerCase();
-function ortPrio(key) {
-  if (key.startsWith("p:")) return validPrio("ort", state?.places?.find(p => "p:" + p.id === key)?.prio);
-  return validPrio("ort", state?.settings?.ort_prio?.[key]);
+const PRIO_F = { pano: ["pano_prio", "pano_prio2"], ort: ["ort_prio", "ort_prio2"] };
+const persons = () => { const n = state?.settings?.persons || []; return [n[0] || "Person 1", n[1] || "Person 2"]; };
+let prioWho = (() => { try { return localStorage.getItem("nordtour.who") === "1" ? 1 : 0; } catch { return 0; } })();
+// Stufe einer Person (0/1) – ohne Zusammenführung
+function prioOf(kind, key, who) {
+  if (kind === "ort" && key.startsWith("p:")) return validPrio("ort", state?.places?.find(p => "p:" + p.id === key)?.[who ? "prio2" : "prio"]);
+  return validPrio(kind, state?.settings?.[PRIO_F[kind][who]]?.[key]);
 }
+function mixPrio(kind, a, b) {
+  if (!a || !b || a === b) return a || b;
+  const L = prioLevels(kind), i = L.findIndex(l => l.id === a), j = L.findIndex(l => l.id === b), mode = state?.settings?.prioMix || "max";
+  return L[mode === "min" ? Math.max(i, j) : mode === "mid" ? Math.floor((i + j) / 2) : Math.min(i, j)].id;
+}
+const panoPrio = id => mixPrio("pano", prioOf("pano", id, 0), prioOf("pano", id, 1));
+const ortSlug = name => nightBase(name).trim().toLowerCase();
+const ortPrio = key => mixPrio("ort", prioOf("ort", key, 0), prioOf("ort", key, 1));
 function setPrio(kind, key, val) {
-  const old = kind === "pano" ? panoPrio(key) : ortPrio(key), next = old === val ? null : val;
+  const old = prioOf(kind, key, prioWho), next = old === val ? null : val;
   state.settings = state.settings || {};
   if (kind === "ort" && key.startsWith("p:")) {
-    const p = state.places?.find(p => "p:" + p.id === key); if (!p) return;
-    if (next) p.prio = next; else delete p.prio;
+    const p = state.places?.find(p => "p:" + p.id === key), k = prioWho ? "prio2" : "prio"; if (!p) return;
+    if (next) p[k] = next; else delete p[k];
   } else {
-    const f = kind === "pano" ? "pano_prio" : "ort_prio", m = { ...(state.settings[f] || {}) };
+    const f = PRIO_F[kind][prioWho], m = { ...(state.settings[f] || {}) };
     if (next) m[key] = next; else delete m[key];
     state.settings[f] = m;
   }
@@ -55,9 +92,10 @@ function redrawPrio() {
   else if (k === "ort") ortMarkers[id]?.openPopup();
 }
 function prioButtons(kind, key, name) {
-  const cur = kind === "pano" ? panoPrio(key) : ortPrio(key);
-  return `<span class="prioseg" role="group" aria-label="Priorität für ${esc(name)}">` + prioLevels(kind).map(({ id: p, name: label }) =>
-    `<button type="button" class="pb" style="--pbc:var(--p-${p});--pbi:var(--pi-${p})" data-prioset="${kind}|${esc(key)}|${p}" aria-pressed="${cur === p}">${esc(label)}</button>`).join("") + `</span>`;
+  const cur = prioOf(kind, key, prioWho), other = prioOf(kind, key, 1 - prioWho), names = persons();
+  return `<span class="prioseg" role="group" aria-label="Priorität von ${esc(names[prioWho])} für ${esc(name)}">` + prioLevels(kind).map(({ id: p, name: label }) =>
+    `<button type="button" class="pb" style="--pbc:var(--p-${p});--pbi:var(--pi-${p})" data-prioset="${kind}|${esc(key)}|${p}" aria-pressed="${cur === p}">${esc(label)}</button>`).join("") +
+    `<span class="prioother" title="Priorität der anderen Person">${esc(names[1 - prioWho])}: ${other ? `<i class="pdot" style="background:var(--p-${other})"></i>${esc(prioName(other))}` : "–"}</span></span>`;
 }
 // Filterleiste mit Anzahl (zugleich Farblegende)
 const prioFilter = { pano: "alle", ort: "alle" };
@@ -211,7 +249,7 @@ $("#addOrt").addEventListener("submit", async e => {
     const dup = allOrte().find(o => hav(o, g) < 0.5 && ortSlug(o.name) === ortSlug(name));
     if (dup) throw new Error(`„${dup.name}“ steht schon in der Liste.`);
     state.places = state.places || [];
-    const p = { id: nid("o"), name, lat: g.lat, lon: g.lon, ...(prio ? { prio } : {}) };
+    const p = { id: nid("o"), name, lat: g.lat, lon: g.lon, ...(prio ? { [prioWho ? "prio2" : "prio"]: prio } : {}) };
     state.places.push(p); prioFilter.ort = "alle"; ortType = "alle";
     $("#oName").value = ""; save(); redrawPrio();
     notice(`„${esc(name)}“ hinzugefügt. Prüfe mit „Auf der Karte“, ob der richtige Ort gefunden wurde.`);

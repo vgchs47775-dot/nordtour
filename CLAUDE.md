@@ -35,7 +35,7 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `lists.js` | Reiter, Kosten, To-dos, Packliste, Kaufen, `normalizeState()` für Datenumstellungen |
 | `einstellungen.js` | Reiter Kategorien und Prioritäten; Vorgaben in `CFG_DEFAULT`/`defaultLevels()`, eigene in `state.settings.cfg` |
 | `theme.js` (im `<head>`) | Hell/Dunkel/Auto; CSS nur über `:root[data-theme="dark"]`, in JS `isDark()` und Ereignis `themechange` |
-| `prio.js` | Prioritäten für Panoramastraßen und Orte, Kartenfarben |
+| `prio.js` | Prioritäten für Panoramastraßen und Orte, Kartenfarben; zwei Personen (`*_prio2`, `prio2`, `settings.persons`, `settings.prioMix`), lesen immer über `panoPrio()`/`ortPrio()` (gemeinsames Ergebnis) bzw. `prioOf()` |
 | `varianten.js` | mehrere Routen (`state.routeList`, `state.routeId`); gewählte Route liegt in `state.days`, nur andere haben `data` |
 | `planer.js` | Route aus Prioritäten; Kennzeichen an Punkten: `wp` (Wegpunkt), `anchor` (An-/Abreise), `key` (Ziel/eigener Ort), an Tagen `auto` (Schlafplatz unterwegs), `panos`; Orte einer Stufe mit `lvNight()` (Vorgabe: Muss) bekommen immer eine Nacht höchstens `settings.gen.near` km entfernt |
 | `etappen.js` | Etappe teilen (Zwischenübernachtung) und Nacht auflösen; Felder `src`, `sights`, `stop`, `split` an Tagen, `pv` an Punkten (Erklärung im Dateikopf); Hinweis `#nightGap` auf Orte ohne Übernachtung in der Nähe |

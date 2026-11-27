@@ -596,3 +596,13 @@ nav.tabs { -webkit-mask-image: none; mask-image: none; padding-right: 0; gap: 0;
 .edname .inline { margin-top: 4px; }
 #edSugg { margin: 0; }
 #edSugg .hint { align-self: center; }
+
+/* Zwei Personen priorisieren */
+.whobar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 4px 0 10px; }
+.whobar .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.whobar .seg button { border: 0; background: var(--surface); color: var(--ink); font: 600 14px var(--font-body); padding: 9px 16px; min-height: 40px; cursor: pointer; }
+.whobar .seg button + button { border-left: 1px solid var(--line); }
+.whobar .seg button[aria-pressed="true"] { background: var(--ink); color: var(--surface); }
+.prioother { font-size: 12.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; padding: 0 4px; white-space: nowrap; }
+#cfgPersons { margin-top: 14px; display: grid; gap: 10px; }
+#cfgPersons h3 { margin: 0; }

@@ -74,7 +74,7 @@ function cfgUsers(k) {   // Einträge, die auf eine Kategorie/Priorität verweis
   if (k === "todoCats") return state.todos.map(o => [o, "cat"]);
   if (k === "listPrios") return [...state.buy, ...state.todos].map(o => [o, "prio"]);
   const s = state.settings;
-  return [...["pano_prio", "ort_prio"].flatMap(f => Object.keys(s[f] || {}).map(id => [s[f], id])), ...(state.places || []).map(p => [p, "prio"])];
+  return [...["pano_prio", "ort_prio", "pano_prio2", "ort_prio2"].flatMap(f => Object.keys(s[f] || {}).map(id => [s[f], id])), ...(state.places || []).flatMap(p => [[p, "prio"], [p, "prio2"]])];
 }
 const cfgRef = (k, it) => k === "levels" ? it.id : it.name;
 const cfgCount = (k, it) => cfgUsers(k).filter(([o, f]) => o[f] === cfgRef(k, it)).length;

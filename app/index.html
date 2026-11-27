@@ -124,6 +124,7 @@
     </div>
     <p class="lead">Norwegens Nationale Touristenstraßen und zwei schwedische Klassiker, sortiert nach Reisetag. Mit „Einplanen“ wird die Etappe live über die Panoramastraße berechnet; der Umweg steht jeweils grün darunter.</p>
     <p class="hint spaced">Tippe bei einer Straße auf ihre Priorität, nochmal tippen nimmt sie weg. Farben auf der Karte: <span id="panoLegend"></span> · Grün = ohne Priorität. Breit = eingeplant, gestrichelt = nicht eingeplant. Ändern unter <a href="#prioritaeten">Einstellungen → Prioritäten</a>.</p>
+    <div class="whobar" id="whoPano"></div>
     <div class="chips" id="panoChips" role="group" aria-label="Nach Priorität filtern"></div>
     <div class="cards" id="panoCards"></div>
     <details class="gone" id="gonePano" hidden></details>
@@ -144,6 +145,7 @@
   <section id="v-orte" hidden aria-labelledby="h-orte">
     <h2 id="h-orte">Orte priorisieren</h2>
     <p class="lead">Alle Übernachtungsorte, Stopps und Ziele deiner Route, nach Reisetag sortiert. Tippe auf eine Priorität, nochmal tippen nimmt sie weg. Farben auf der Karte: <span id="ortLegend"></span>. Ändern unter <a href="#prioritaeten">Einstellungen → Prioritäten</a>.</p>
+    <div class="whobar" id="whoOrt"></div>
     <div class="chips" id="ortChips" role="group" aria-label="Nach Priorität filtern"></div>
     <div class="chips" id="ortTypes" role="group" aria-label="Nach Art filtern"></div>
     <ul class="ortlist" id="ortList"></ul>
@@ -302,6 +304,7 @@
     <h2 id="h-prios">Prioritäten</h2>
     <p class="lead">Farbe und Name direkt ändern, mit den Pfeilen nach Wichtigkeit sortieren. Die Farben gelten auch auf der Karte.</p>
     <div class="cfggrid one" id="cfg-prioritaeten"></div>
+    <section class="panel cfgpanel" id="cfgPersons"></section>
   </section>
 
   <footer class="foot">

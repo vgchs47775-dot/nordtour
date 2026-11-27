@@ -9,7 +9,7 @@
 "use strict";
 
 /* ---------- Rückgängig: Tage und alles, was hier sonst geändert wird ---------- */
-const UNDO_KEYS = ["extrasCfg", "ort_prio", "ort_weg", "panorama_geplant", "sights_geplant"];
+const UNDO_KEYS = ["extrasCfg", "ort_prio", "ort_prio2", "ort_weg", "panorama_geplant", "sights_geplant"];
 function undoPoint() {
   const days = JSON.stringify(state.days), rest = JSON.stringify({ s: Object.fromEntries(UNDO_KEYS.map(k => [k, state.settings[k]])), places: state.places, routeList: state.routeList });
   const costs = state.costs.map(c => [c.id, c.dayId]);
@@ -277,7 +277,7 @@ function saveEdit() {
       if (/zu hause/i.test(name)) return err("Dieser Name ist für die Heimreise reserviert.");
       if (key !== id && allOrte().some(o => o.key === key)) return err(`„${name}“ gibt es schon.`);
       changePoints(isNamed(id), { name: x.name, lat: x.lat, lon: x.lon }, next);
-      if (key !== id) for (const f of ["ort_prio", "ort_weg"]) if (state.settings[f]?.[id] !== undefined) {
+      if (key !== id) for (const f of ["ort_prio", "ort_prio2", "ort_weg"]) if (state.settings[f]?.[id] !== undefined) {
         const m = { ...state.settings[f], [key]: state.settings[f][id] }; delete m[id]; state.settings[f] = m;
       }
     }
