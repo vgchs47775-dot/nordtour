@@ -519,6 +519,7 @@ function dayHtml(d, idx, list) {
       ${typeof ferryHtml === "function" ? ferryHtml(d, r) : ""}
       ${d.night ? `<span class="night">${esc(d.night)}</span>` : ""}
       ${typeof dayExtrasHtml === "function" ? dayExtrasHtml(d, r) : ""}
+      ${typeof actsLine === "function" && editingDay !== d.id ? actsLine(d) : ""}
       ${d.todo ? `<span class="todo">${esc(d.todo).replace(/\n/g, "<br>")}</span>` : ""}
       ${d.warn ? `<span class="w">${esc(d.warn)}</span>` : ""}
       ${editingDay !== d.id ? `<span class="acts">

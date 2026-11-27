@@ -149,7 +149,7 @@ function renderGone() {
 let ed = null, edMap = null, edLayer = null, edTimer = null, edRun = 0;
 const edField = (id, label, value, extra = "") => `<label class="lbl" for="${id}">${label}<input id="${id}" value="${esc(value ?? "")}" ${extra}></label>`;
 const edArea = (id, label, value) => `<label class="lbl" for="${id}">${label}<textarea id="${id}" rows="3" maxlength="900">${esc(value ?? "")}</textarea></label>`;
-function openEdit(kind, id) {
+function openEdit(kind, id, preset) {
   let x, f, hint = "", title;
   if (kind === "ort") {
     x = allOrte().find(o => o.key === id); if (!x) return;
@@ -161,15 +161,20 @@ function openEdit(kind, id) {
       (stops.length ? edField("edStay", "Aufenthalt beim Stopp (Minuten)", stops[0].stay || "", 'type="number" min="0" max="1440" step="5" inputmode="numeric" placeholder="0"') : "");
     ed = { kind, id, x, stops: stops.length, pos: { lat: x.lat, lon: x.lon } };
   } else if (kind === "sights") {
-    x = SIGHTS().find(s => s.id === id); if (!x) return;
-    title = "Ziel bearbeiten";
+    // id = null: neues eigenes Erlebnis; preset = Vorschlag aus der Aktivitäten-Suche (aktivitaeten.js)
+    x = id ? SIGHTS().find(s => s.id === id) : { id: null, name: "", type: "", desc: "", visit: 1, detour: 0, day: "", imgs: [], ...newSightPos(), ...(preset || {}) };
+    if (!x) return;
+    title = id ? "Erlebnis bearbeiten" : "Neues Erlebnis";
+    if (!id) hint = preset ? "Prüfe die Angaben und tippe auf „Speichern“." : "Name eintragen und die Lage festlegen: Ort unten suchen oder auf die Karte tippen.";
     f = `<div class="two">${edField("edName", "Name", x.name, 'type="text" maxlength="80" required')}${edField("edType", "Art", x.type, 'type="text" maxlength="30" list="edTypes"')}</div>
       <datalist id="edTypes">${[...new Set(SIGHTS().map(s => s.type))].map(t => `<option value="${esc(t)}">`).join("")}</datalist>
       ${edArea("edDesc", "Beschreibung", x.desc)}
       <div class="three">${edField("edVisit", "Zeit vor Ort (Min.)", Math.round(x.visit * 60), 'type="number" min="0" max="1440" step="5" inputmode="numeric"')}
       ${edField("edDetour", "Umweg (Min.)", Math.round(x.detour * 60), 'type="number" min="0" max="1440" step="5" inputmode="numeric"')}
-      <label class="lbl" for="edDay">Reisetag<select id="edDay"><option value="">automatisch (nächster Tag)</option>${sortedDays().map(d => `<option value="${esc(d.id)}"${d.id === x.day ? " selected" : ""}>${fmtDate(d.date)}: ${esc(d.title || "")}</option>`).join("")}</select></label></div>`;
-    ed = { kind, id, x, pos: { lat: x.lat, lon: x.lon } };
+      <label class="lbl" for="edDay">Reisetag<select id="edDay"><option value="">automatisch (nächster Tag)</option>${sortedDays().map(d => `<option value="${esc(d.id)}"${d.id === x.day ? " selected" : ""}>${fmtDate(d.date)}: ${esc(d.title || "")}</option>`).join("")}</select></label></div>
+      <div class="edphotos"><div class="edline"><span class="lbl">Fotos <span class="hint">(antippen = auswählen, höchstens 6)</span></span><button type="button" class="btn ghost mini" id="edPhotoFind">Fotos in der Nähe suchen</button></div>
+      <div class="photogrid" id="edPhotos"></div></div>`;
+    ed = { kind, id, x, pos: { lat: x.lat, lon: x.lon }, imgs: [...(x.imgs || [])], cands: [], picked: new Set((x.imgs || []).map(i => i.src)), planIt: !!preset };
   } else {
     x = id ? PANO().find(p => p.id === id) : { id: null, name: "", land: "", desc: "", fit: "", imgs: [], geom: null, way: [] };
     if (!x) return;
@@ -282,9 +287,19 @@ function saveEdit() {
       }
     }
   } else if (kind === "sights") {
+    const imgs = [...ed.imgs, ...ed.cands].filter((i, k, a) => ed.picked.has(i.src) && a.findIndex(j => j.src === i.src) === k).slice(0, 6);
+    const data = { name, type: val("edType") || x.type || "Erlebnis", desc: val("edDesc"), visit: mins("edVisit") / 60, detour: mins("edDetour") / 60, ...ed.pos };
+    if (!id) {
+      const sid = nid("own");
+      patchExtra("sights", sid, { own: true, ...data, day: val("edDay"), imgs, ...(x.link ? { link: x.link } : {}) });
+      if (ed.planIt) state.settings.sights_geplant = [...new Set([...(state.settings.sights_geplant || []), sid])];
+      const planned = ed.planIt; closeEdit();
+      finish(undo, `„${esc(name)}“ angelegt${planned ? " und eingeplant" : ""}. Es steht im Reiter „Erleben“${val("edDay") ? " beim gewählten Tag" : ""}.`);
+      return;
+    }
     changePoints(isKeyed("s:" + id), { name: x.name, lat: x.lat, lon: x.lon }, { name, ...ed.pos });
     const keepDay = !sortedDays().some(d => d.id === x.day) && !val("edDay");      // Tag gehört zu einer anderen Route
-    patchExtra("sights", id, { name, type: val("edType") || x.type, desc: val("edDesc"), visit: mins("edVisit") / 60, detour: mins("edDetour") / 60, ...ed.pos, day: keepDay ? x.day : val("edDay") });
+    patchExtra("sights", id, { ...data, day: keepDay ? x.day : val("edDay"), ...(JSON.stringify(imgs) !== JSON.stringify(x.imgs || []) ? { imgs } : {}) });
   } else {
     if (ed.changed && !ed.line) return err(ed.pts.length < 2 ? "Lege mit zwei Punkten auf der Karte Anfang und Ende fest." : "Warte, bis der neue Verlauf berechnet ist.");
     const imgs = [...ed.imgs, ...ed.cands].filter((i, k, a) => ed.picked.has(i.src) && a.findIndex(j => j.src === i.src) === k).slice(0, 6);
@@ -312,8 +327,14 @@ const stripTags = s => (new DOMParser().parseFromString(s || "", "text/html").bo
 async function reverseCountry(p) {
   try { return (await nomi(`reverse?zoom=3&lat=${p.lat}&lon=${p.lon}`)).address?.country || ""; } catch { return ""; }
 }
+// Lage für ein neues Erlebnis: gewählter Tag, sonst Kartenmitte
+function newSightPos() {
+  const d = state.days.find(x => x.id === selDay && hasPos(x)), c = map.getCenter();
+  return d ? { lat: d.lat, lon: d.lon, day: d.id } : { lat: +c.lat.toFixed(4), lon: +c.lng.toFixed(4) };
+}
 async function findPhotos() {
-  const me = ed; if (!me?.line?.length) { $("#edErr").textContent = "Lege zuerst den Verlauf fest."; return; }
+  const me = ed; if (me?.pos) me.line = [[me.pos.lat, me.pos.lon]], me.km = 1;                   // Erlebnis: rund um den Punkt
+  if (!me?.line?.length) { $("#edErr").textContent = "Lege zuerst den Verlauf fest."; return; }
   if (!navigator.onLine) { $("#edErr").textContent = "Für die Fotosuche brauchst du Internet."; return; }
   const btn = $("#edPhotoFind"); btn.disabled = true; $("#edPhotos").dataset.busy = "Fotos werden gesucht …"; drawPhotos();
   const L2 = me.line, n = Math.min(6, Math.max(3, Math.round((me.km || 50) / 25))), found = new Map();
@@ -376,6 +397,7 @@ window.addEventListener("DOMContentLoaded", () => {
     $("#edErr").textContent = ""; drawPhotos();
   });
   $("#panoNew").addEventListener("click", () => openEdit("pano", null));
+  $("#sightNew").addEventListener("click", () => openEdit("sights", null));
   $("#edMap").addEventListener("click", e => {
     const b = e.target.closest("[data-edrm]"); if (!b || !ed?.pts) return;
     edMap.closePopup();

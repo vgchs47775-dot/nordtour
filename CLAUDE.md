@@ -23,7 +23,7 @@ klassische Skripte in `app/`, die sich den globalen Gültigkeitsbereich teilen.
 
 ## Aufbau
 Ladereihenfolge (siehe Ende von `app/index.html`):
-`config → extras → app → stops → osm → toll → ferrycost → ferries → einstellungen → lists → prio → varianten → planer → etappen → panowege → bearbeiten → panosuche → sky → aurora → journal → sync → cache → backup → pwa`
+`config → extras → app → stops → osm → toll → ferrycost → ferries → einstellungen → lists → prio → varianten → planer → etappen → panowege → bearbeiten → panosuche → aktivitaeten → sky → aurora → journal → sync → cache → backup → pwa`
 
 | Datei | Aufgabe |
 |---|---|
@@ -42,6 +42,7 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `panowege.js` | eingeplante Panoramastraßen ganz fahren: Wegpunkte `way` (extras.json), Anteil `panoShare()`, Hinweis `#panoGap`, Einbau in bestehende Routen; `pano` an Punkten |
 | `bearbeiten.js` | Orte, Ziele und Panoramastraßen bearbeiten/löschen; Änderungen in `settings.extrasCfg` über extras.json gelegt (immer `PANO()`/`SIGHTS()` benutzen, nie `EXTRAS.pano`), `settings.ort_weg`; eigene Panoramastraßen mit `own` (Fotos von Wikimedia Commons, mit Urheber und Lizenz) |
 | `panosuche.js`, `strassen.json`, `strassen-geo.json` | Panoramastraße per Name finden: Liste und Verlauf benannter Straßen aus OpenStreetMap (beide Dateien erzeugt `werkzeuge/strassen.py` auf dem PC der Person, nicht im Repository), sonst Suche über Nominatim/Overpass; Wegpunkte bis die Straße zu ≥ 92 % gefahren wird |
+| `aktivitaeten.js` | Knopf „🔎 Aktivitäten“ an Übernachtungen und Stopps: Suche über Wikipedia (de/en) und Overpass, „Übernehmen“ legt ein eigenes Erlebnis an (`own` in `settings.extrasCfg.sights`) |
 | `sky.js`, `aurora.js` | Nachthimmel, Kp-Prognose, Polarlicht-Karte (NOAA) |
 | `journal.js` | Tagebuch; Fotos im privaten Supabase-Bucket `tagebuch`, Warteschlange in IndexedDB |
 | `sync.js`, `cache.js`, `backup.js` | Cloud-Abgleich (`trips`), geteilter Zwischenspeicher (`route_cache`), Sicherungen (`trip_backups`) |

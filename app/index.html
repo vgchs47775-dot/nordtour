@@ -134,7 +134,7 @@
   <section id="v-erleben" hidden aria-labelledby="h-erleben">
     <div class="toolbar">
       <h2 id="h-erleben">Sehenswürdigkeiten &amp; Wanderungen</h2>
-      <div class="acts"><span class="toggle" id="sightSum"></span><label class="toggle"><input type="checkbox" id="sightOnly"> Nur Eingeplantes</label></div>
+      <div class="acts"><span class="toggle" id="sightSum"></span><label class="toggle"><input type="checkbox" id="sightOnly"> Nur Eingeplantes</label><button class="btn mini" type="button" id="sightNew">+ Eigenes Erlebnis</button></div>
     </div>
     <p class="lead">Ziele an deiner Strecke, nach Reisetag sortiert. Alles lässt sich bearbeiten und löschen. Eingeplantes erscheint beim Tag mit Besuchszeit und Umweg. Alle Zeiten sind grobe Richtwerte.</p>
     <div id="sightList"></div>
@@ -377,6 +377,14 @@
   </form>
 </dialog>
 
+<dialog id="actDlg" class="gendlg" aria-labelledby="actTitle">
+  <div class="toolbar"><h2 id="actTitle">🔎 Aktivitäten</h2><button class="btn ghost mini" type="button" id="actClose">Schließen</button></div>
+  <div class="actbar"><label class="toggle">Umkreis<select id="actR"><option value="3">3 km</option><option value="5">5 km</option><option value="10">10 km</option><option value="20">20 km</option></select></label><span class="hint" id="actState" aria-live="polite"></span></div>
+  <div class="chips" id="actChips" role="group" aria-label="Nach Art filtern"></div>
+  <ul class="actlist" id="actList"></ul>
+  <p class="hint">Quellen: Wikipedia und OpenStreetMap. „Übernehmen“ legt ein eigenes Erlebnis an, das du vor dem Speichern noch ändern kannst.</p>
+</dialog>
+
 <dialog id="genDlg" class="gendlg" aria-labelledby="genTitle">
   <div class="toolbar"><h2 id="genTitle">✨ Route aus Prioritäten</h2><button class="btn ghost mini" type="button" id="genClose">Schließen</button></div>
   <form id="genForm">
@@ -434,6 +442,7 @@
 <script src="panowege.js"></script>
 <script src="bearbeiten.js"></script>
 <script src="panosuche.js"></script>
+<script src="aktivitaeten.js"></script>
 <script src="sky.js"></script>
 <script src="aurora.js"></script>
 <script src="journal.js"></script>

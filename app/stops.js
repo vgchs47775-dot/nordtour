@@ -84,6 +84,7 @@ function stopPopup(d, i) {
   const v = d.via[i];
   if (!window.mapEdit) return `<div class="pop"><b>Stopp ${i + 1}: ${esc(v.name)}</b>
     <span>${v.stay ? `Aufenthalt ${v.stay} min` : "ohne Aufenthalt"}${v.ferry ? " · ab hier Fähre" : ""}</span>
+    ${typeof actsBtn === "function" && !v.wp && !v.ferry ? `<div class="acts">${actsBtn(v, v.name, d.id)}</div>` : ""}
     <span class="hint">Zum Ändern oben links auf der Karte „✎ Karte bearbeiten“ antippen.</span></div>`;
   return `<form class="pop stopform" data-stop="${esc(d.id)}:${i}">
     <b>Stopp ${i + 1}${v.ferry ? " · ab hier Fähre" : ""}</b>

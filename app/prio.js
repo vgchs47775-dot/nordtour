@@ -209,7 +209,7 @@ function drawOrte() {
 function ortPopup(key) {
   const o = allOrte().find(x => x.key === key); if (!o) return "";
   return `<div class="pop" data-pop="ort|${esc(key)}"><b>${esc(o.name)}</b><span>${ORT_TYPES[o.type]}${ortWhen(o) ? " · " + esc(ortWhen(o)) : ""}</span>${prioButtons("ort", key, o.name)}
-    <div class="acts"><a class="btn ghost mini" href="#orte">Alle Orte</a><button type="button" class="btn ghost mini" data-edit-x="ort|${esc(key)}">Bearbeiten</button></div></div>`;
+    <div class="acts"><a class="btn ghost mini" href="#orte">Alle Orte</a>${typeof actsBtn === "function" ? actsBtn(o, o.name, sortedDays()[o.days[0]]?.id) : ""}<button type="button" class="btn ghost mini" data-edit-x="ort|${esc(key)}">Bearbeiten</button></div></div>`;
 }
 function showOrtOnMap(key) {
   const o = allOrte().find(x => x.key === key); if (!o) return;

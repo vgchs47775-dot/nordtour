@@ -31,6 +31,9 @@ function extrasList(kind) {
   // selbst angelegte Panoramastraßen (own)
   if (kind === "pano") for (const [id, c] of Object.entries(cfg || {})) if (c.own && !c.gone && c.geom?.length > 1)
     list.push({ land: "", fit: "", desc: "", imgs: [], km: 0, ...c, id, custom: true, days: [], fallbackExtra: "" });
+  // selbst angelegte Erlebnisse
+  if (kind === "sights") for (const [id, c] of Object.entries(cfg || {})) if (c.own && !c.gone && hasPos(c))
+    list.push({ type: "Erlebnis", desc: "", imgs: [], visit: 1, detour: 0, day: "", ...c, id });
   extrasMemo[kind] = { raw, cfg, list }; extrasRev++;
   return list;
 }
@@ -230,6 +233,7 @@ function sightCard(x) {
       <button type="button" class="btn ghost mini" data-edit-x="sights|${esc(x.id)}">Bearbeiten</button>
       <button type="button" class="btn danger mini" data-del-x="sights|${esc(x.id)}">Löschen</button>
       <a class="btn go mini" href="https://www.google.com/maps/search/?api=1&query=${x.lat},${x.lon}" target="_blank" rel="noopener noreferrer">Google Maps ↗</a>
+      ${safeUrl(x.link) ? `<a class="btn ghost mini" href="${esc(safeUrl(x.link))}" target="_blank" rel="noopener noreferrer">Mehr ↗</a>` : ""}
     </div>
   </article>`;
 }
