@@ -6,7 +6,7 @@
    Wird nach stops.js geladen. */
 "use strict";
 
-const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
+const OVERPASS = ["https://overpass-api.de/api/interpreter", "https://maps.mail.ru/osm/tools/overpass/api/interpreter", "https://overpass.kumi.systems/api/interpreter"];
 const OSTORE = "nordtour.osm.v1";
 const FUEL_GAP_WARN = 100;          // km ohne Tankstelle, ab denen gewarnt wird
 let osmData = {}, osmStatus = {}, osmBusy = false;
@@ -51,10 +51,10 @@ function nearestOnTrack(t, lat, lon) {
 }
 
 /* ---------- Abfrage ---------- */
-async function overpass(q) {
+async function overpass(q, ms = 100e3) {
   let lastErr;
   for (const url of OVERPASS) {
-    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 100e3);   // höchstens 100 s warten
+    const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), ms);   // höchstens 100 s warten (Suche: kürzer)
     try {
       const r = await fetch(url, { method: "POST", body: new URLSearchParams({ data: q }), signal: ctl.signal });
       if (r.ok) return await r.json();

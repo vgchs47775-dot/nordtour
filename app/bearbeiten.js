@@ -174,9 +174,11 @@ function openEdit(kind, id) {
     x = id ? PANO().find(p => p.id === id) : { id: null, name: "", land: "", desc: "", fit: "", imgs: [], geom: null, way: [] };
     if (!x) return;
     title = id ? "Panoramastraße bearbeiten" : "Neue Panoramastraße";
-    hint = id ? "Verlauf: Punkte ziehen. Auf die Karte tippen = Punkt einfügen, Punkt antippen = entfernen. Die Straße folgt den Punkten von 1 bis zum letzten."
-      : "Tippe auf der Karte zuerst den Anfang und dann das Ende der Straße an (oder suche die Orte unten). Weitere Punkte legen den Weg dazwischen fest.";
-    f = `<div class="two">${edField("edName", "Name", x.name, 'type="text" maxlength="80" required')}${edField("edLand", "Land", x.land, 'type="text" maxlength="40"')}</div>
+    hint = id ? "Verlauf: „Strecke suchen“ lädt ihn aus OpenStreetMap. Von Hand: Punkte ziehen, auf die Karte tippen = Punkt einfügen, Punkt antippen = entfernen."
+      : "Gib den Namen ein und wähle die Straße aus der Liste – Verlauf, Fotos und, wenn vorhanden, eine Beschreibung kommen von selbst. Findet die App sie nicht, tippe Anfang und Ende auf der Karte an.";
+    f = `<div class="edname"><label class="lbl" for="edName">Name der Panoramastraße<span class="inline"><input id="edName" value="${esc(x.name)}" type="text" maxlength="80" required placeholder="z. B. Gaularfjellet" autocomplete="off"><button type="button" class="btn" id="edRoadFind">🔎 Strecke suchen</button></span></label>
+      <div class="chips" id="edSugg" hidden></div></div>
+      ${edField("edLand", "Land", x.land, 'type="text" maxlength="40"')}
       ${edArea("edDesc", "Beschreibung", x.desc)}${edField("edFit", "Hinweis (grün)", x.fit, 'type="text" maxlength="200"')}
       <div class="edphotos"><div class="edline"><span class="lbl">Fotos <span class="hint">(antippen = auswählen, höchstens 6)</span></span><button type="button" class="btn ghost mini" id="edPhotoFind">Fotos an der Strecke suchen</button></div>
       <div class="photogrid" id="edPhotos"></div></div>`;
@@ -314,16 +316,16 @@ async function findPhotos() {
   const me = ed; if (!me?.line?.length) { $("#edErr").textContent = "Lege zuerst den Verlauf fest."; return; }
   if (!navigator.onLine) { $("#edErr").textContent = "Für die Fotosuche brauchst du Internet."; return; }
   const btn = $("#edPhotoFind"); btn.disabled = true; $("#edPhotos").dataset.busy = "Fotos werden gesucht …"; drawPhotos();
-  const L2 = me.line, n = Math.min(4, Math.max(2, Math.round((me.km || 50) / 40))), found = new Map();
+  const L2 = me.line, n = Math.min(6, Math.max(3, Math.round((me.km || 50) / 25))), found = new Map();
   try {
     for (let k = 0; k < n; k++) {
       const q = L2[Math.round(k * (L2.length - 1) / Math.max(1, n - 1))];
-      const u = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggsnamespace=6&ggslimit=25&ggsradius=8000" +
+      const u = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggsnamespace=6&ggslimit=25&ggsradius=10000" +
         `&ggscoord=${q[0].toFixed(4)}|${q[1].toFixed(4)}&prop=imageinfo&iiprop=url|size|mime|extmetadata&iiurlwidth=800&iiextmetadatafilter=Artist|LicenseShortName`;
       const j = await (await fetch(u)).json();
       for (const pg of Object.values(j.query?.pages || {})) {
         const i = pg.imageinfo?.[0], m = i?.extmetadata || {}, r = i ? i.width / i.height : 0;
-        if (!i?.thumburl || i.mime !== "image/jpeg" || r < 1.2 || r > 2 || i.width < 1200 || /map|karte|kart\b|logo|banner|sign|skilt|diagram/i.test(pg.title)) continue;
+        if (!i?.thumburl || i.mime !== "image/jpeg" || r < 1.2 || r > 2 || i.width < 1000 || /map|karte|kart\b|logo|banner|sign|skilt|diagram/i.test(pg.title)) continue;
         found.set(i.thumburl, { src: i.thumburl, page: i.descriptionurl, artist: stripTags(m.Artist?.value) || "unbekannt", license: stripTags(m.LicenseShortName?.value) || "siehe Wikimedia Commons" });
       }
       if (ed !== me) return;

@@ -592,3 +592,7 @@ nav.tabs { -webkit-mask-image: none; mask-image: none; padding-right: 0; gap: 0;
 .photo[aria-pressed="true"] { border-color: var(--sun); }
 .photo[aria-pressed="true"] img { opacity: 1; }
 .photo[aria-pressed="true"] span { display: grid; }
+.edname { display: grid; gap: 6px; }
+.edname .inline { margin-top: 4px; }
+#edSugg { margin: 0; }
+#edSugg .hint { align-self: center; }
