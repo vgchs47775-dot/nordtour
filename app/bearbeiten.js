@@ -31,7 +31,7 @@ function patchExtra(kind, id, patch) {
   if (list[id] && !Object.keys(list[id]).length) delete list[id];
   cfg[kind] = list; state.settings.extrasCfg = cfg;    // neues Objekt, damit PANO()/SIGHTS() neu aufbauen
 }
-const rawExtra = (kind, id) => EXTRAS?.[kind === "pano" ? "pano" : "sights"]?.find(x => x.id === id);
+const rawExtra = (kind, id) => EXTRAS?.[kind === "pano" ? "pano" : "sights"]?.find(x => x.id === id) || (state.settings.extrasCfg?.[kind]?.[id]?.own ? state.settings.extrasCfg[kind][id] : null);
 const hasPatch = (kind, id) => Object.keys(state.settings.extrasCfg?.[kind]?.[id] || {}).length > 0;
 
 /* ---------- Namen und Lage in den Tagen mitändern ---------- */
@@ -171,21 +171,30 @@ function openEdit(kind, id) {
       <label class="lbl" for="edDay">Reisetag<select id="edDay"><option value="">automatisch (nächster Tag)</option>${sortedDays().map(d => `<option value="${esc(d.id)}"${d.id === x.day ? " selected" : ""}>${fmtDate(d.date)}: ${esc(d.title || "")}</option>`).join("")}</select></label></div>`;
     ed = { kind, id, x, pos: { lat: x.lat, lon: x.lon } };
   } else {
-    x = PANO().find(p => p.id === id); if (!x) return;
-    title = "Panoramastraße bearbeiten";
-    hint = "Verlauf: Punkte ziehen. Auf die Karte tippen = Punkt einfügen, Punkt antippen = entfernen. Die Straße folgt den Punkten von 1 bis zum letzten.";
+    x = id ? PANO().find(p => p.id === id) : { id: null, name: "", land: "", desc: "", fit: "", imgs: [], geom: null, way: [] };
+    if (!x) return;
+    title = id ? "Panoramastraße bearbeiten" : "Neue Panoramastraße";
+    hint = id ? "Verlauf: Punkte ziehen. Auf die Karte tippen = Punkt einfügen, Punkt antippen = entfernen. Die Straße folgt den Punkten von 1 bis zum letzten."
+      : "Tippe auf der Karte zuerst den Anfang und dann das Ende der Straße an (oder suche die Orte unten). Weitere Punkte legen den Weg dazwischen fest.";
     f = `<div class="two">${edField("edName", "Name", x.name, 'type="text" maxlength="80" required')}${edField("edLand", "Land", x.land, 'type="text" maxlength="40"')}</div>
-      ${edArea("edDesc", "Beschreibung", x.desc)}${edField("edFit", "Hinweis (grün)", x.fit, 'type="text" maxlength="200"')}`;
-    ed = { kind, id, x, pts: panoWay(x).map(q => ({ lat: q[0], lon: q[1] })), line: x.geom, km: x.km, changed: false };
+      ${edArea("edDesc", "Beschreibung", x.desc)}${edField("edFit", "Hinweis (grün)", x.fit, 'type="text" maxlength="200"')}
+      <div class="edphotos"><div class="edline"><span class="lbl">Fotos <span class="hint">(antippen = auswählen, höchstens 6)</span></span><button type="button" class="btn ghost mini" id="edPhotoFind">Fotos an der Strecke suchen</button></div>
+      <div class="photogrid" id="edPhotos"></div></div>`;
+    ed = { kind, id, x, pts: x.geom ? panoWay(x).map(q => ({ lat: q[0], lon: q[1] })) : [], line: x.geom, km: x.km, changed: !id,
+      imgs: [...(x.imgs || [])], cands: [], picked: new Set((x.imgs || []).map(i => i.src)) };
   }
   $("#edTitle").textContent = title; $("#edHint").textContent = hint; $("#edHint").hidden = !hint;
   $("#edFields").innerHTML = f; $("#edErr").textContent = ""; $("#edInfo").textContent = ""; $("#edQuery").value = "";
   $("#edSearchLbl").textContent = kind === "pano" ? "Punkt über die Ortssuche einfügen" : "Lage über die Ortssuche setzen";
-  $("#edReset").hidden = !(kind !== "ort" && hasPatch(kind, id));
+  $("#edReset").hidden = !(kind !== "ort" && id && hasPatch(kind, id) && !x.own);
+  $("#edDel").hidden = !id;
+  if (ed.imgs) drawPhotos();
   $("#edPtUndo").hidden = kind !== "pano"; $("#edPtUndo").disabled = true; $("#edSave").disabled = false;
   $("#editDlg").showModal(); $("#editDlg").scrollTop = 0;
   initEdMap(); edMap.invalidateSize();
-  if (ed.pts) edMap.fitBounds(L.latLngBounds(ed.line), { padding: [24, 24], animate: false }); else edMap.setView([ed.pos.lat, ed.pos.lon], 11, { animate: false });
+  if (ed.pts && ed.line) edMap.fitBounds(L.latLngBounds(ed.line), { padding: [24, 24], animate: false });
+  else if (ed.pts) { const ps = sortedDays().filter(hasPos).map(d => [d.lat, d.lon]); ps.length ? edMap.fitBounds(L.latLngBounds(ps), { padding: [24, 24], animate: false }) : edMap.setView([63, 12], 5, { animate: false }); }
+  else edMap.setView([ed.pos.lat, ed.pos.lon], 11, { animate: false });
   drawEd();
 }
 function initEdMap() {
@@ -201,6 +210,7 @@ function edSet(p) {                                    // Karte angetippt oder O
   if (!ed.pts) { ed.pos = round4(p); drawEd(); return; }
   if (ed.pts.length >= 20) { $("#edErr").textContent = "Höchstens 20 Punkte."; return; }
   edPush();
+  if (ed.pts.length < 2) { ed.pts.push(round4(p)); edChanged(); return; }   // neue Straße: Anfang, dann Ende
   // dort einfügen, wo der Punkt am wenigsten Umweg macht – auch vor dem ersten oder nach dem letzten
   const P = ed.pts, q = round4(p); let best = 0, bd = hav(q, P[0]);
   for (let i = 1; i < P.length; i++) { const c = hav(P[i - 1], q) + hav(q, P[i]) - hav(P[i - 1], P[i]); if (c < bd) { bd = c; best = i; } }
@@ -213,7 +223,7 @@ function edChanged() { ed.changed = true; ed.line = null; drawEd(); clearTimeout
 async function edRoute() {
   if (!ed?.pts) return;
   const run = ++edRun, me = ed; $("#edErr").textContent = "";
-  if (me.pts.length < 2) { $("#edInfo").textContent = ""; $("#edErr").textContent = "Mindestens zwei Punkte."; return; }
+  if (me.pts.length < 2) { $("#edInfo").textContent = me.pts.length ? "Jetzt das Ende der Straße antippen." : ""; return; }
   if (!navigator.onLine) { $("#edErr").textContent = "Für einen neuen Verlauf brauchst du Internet."; return; }
   $("#edInfo").textContent = "Verlauf wird berechnet …"; $("#edSave").disabled = true;
   try {
@@ -224,6 +234,8 @@ async function edRoute() {
     line.push(all.at(-1));
     me.line = line.map(q => [+q[0].toFixed(4), +q[1].toFixed(4)]); me.km = Math.round(r.km);
     $("#edInfo").textContent = `Neuer Verlauf: ca. ${num(r.km)} km · ${fmtShort(r.h)}`;
+    if (!me.id && !me.cands.length && !me.imgs.length) findPhotos();       // neue Straße: gleich Fotos vorschlagen
+    if (!me.id && !$("#edLand").value.trim()) reverseCountry(me.pts[0]).then(c => { if (ed === me && c && !$("#edLand").value.trim()) $("#edLand").value = c; });
   } catch (e) {
     if (run !== edRun || ed !== me) return;
     $("#edInfo").textContent = ""; $("#edErr").textContent = e.perm ? (await findRouteError(e)).msg : "Der Routing-Server ist gerade gestört. Versuche es gleich noch einmal.";
@@ -272,10 +284,17 @@ function saveEdit() {
     const keepDay = !sortedDays().some(d => d.id === x.day) && !val("edDay");      // Tag gehört zu einer anderen Route
     patchExtra("sights", id, { name, type: val("edType") || x.type, desc: val("edDesc"), visit: mins("edVisit") / 60, detour: mins("edDetour") / 60, ...ed.pos, day: keepDay ? x.day : val("edDay") });
   } else {
-    if (ed.changed && !ed.line) return err("Warte, bis der neue Verlauf berechnet ist.");
+    if (ed.changed && !ed.line) return err(ed.pts.length < 2 ? "Lege mit zwei Punkten auf der Karte Anfang und Ende fest." : "Warte, bis der neue Verlauf berechnet ist.");
+    const imgs = [...ed.imgs, ...ed.cands].filter((i, k, a) => ed.picked.has(i.src) && a.findIndex(j => j.src === i.src) === k).slice(0, 6);
+    if (!id) {
+      const nid_ = nid("own");
+      patchExtra("pano", nid_, { own: true, name, land: val("edLand"), desc: val("edDesc"), fit: val("edFit"), geom: ed.line, way: ed.pts.map(p => [p.lat, p.lon]), km: ed.km, imgs });
+      closeEdit(); finish(undo, `„${esc(name)}“ angelegt. Setze eine Priorität oder tippe auf „Einplanen“, damit sie in die Route kommt.`);
+      return;
+    }
     if (name !== x.name) for (const d of allDays()) for (const v of d.via || []) if (v.pano === id || v.name === panoWp(x)) v.name = `${name} (Wegpunkt)`;
     const on = isPlanned("pano", id);
-    const patch = { name, land: val("edLand"), desc: val("edDesc"), fit: val("edFit") };
+    const patch = { name, land: val("edLand"), desc: val("edDesc"), fit: val("edFit"), ...(JSON.stringify(imgs) !== JSON.stringify(x.imgs || []) ? { imgs } : {}) };
     if (!ed.changed) patchExtra("pano", id, patch);
     else {
       removePano(id);
@@ -284,6 +303,43 @@ function saveEdit() {
     }
   }
   closeEdit(); finish(undo, `„${esc(name)}“ gespeichert.`);
+}
+/* ---------- Fotos von Wikimedia Commons (frei lizenziert, mit Urheber) ---------- */
+// nur den Text: DOMParser führt nichts aus (anders als innerHTML, wo z. B. onerror von Bildern liefe)
+const stripTags = s => (new DOMParser().parseFromString(s || "", "text/html").body.textContent || "").replace(/\s+/g, " ").trim();
+async function reverseCountry(p) {
+  try { return (await nomi(`reverse?zoom=3&lat=${p.lat}&lon=${p.lon}`)).address?.country || ""; } catch { return ""; }
+}
+async function findPhotos() {
+  const me = ed; if (!me?.line?.length) { $("#edErr").textContent = "Lege zuerst den Verlauf fest."; return; }
+  if (!navigator.onLine) { $("#edErr").textContent = "Für die Fotosuche brauchst du Internet."; return; }
+  const btn = $("#edPhotoFind"); btn.disabled = true; $("#edPhotos").dataset.busy = "Fotos werden gesucht …"; drawPhotos();
+  const L2 = me.line, n = Math.min(4, Math.max(2, Math.round((me.km || 50) / 40))), found = new Map();
+  try {
+    for (let k = 0; k < n; k++) {
+      const q = L2[Math.round(k * (L2.length - 1) / Math.max(1, n - 1))];
+      const u = "https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=geosearch&ggsnamespace=6&ggslimit=25&ggsradius=8000" +
+        `&ggscoord=${q[0].toFixed(4)}|${q[1].toFixed(4)}&prop=imageinfo&iiprop=url|size|mime|extmetadata&iiurlwidth=800&iiextmetadatafilter=Artist|LicenseShortName`;
+      const j = await (await fetch(u)).json();
+      for (const pg of Object.values(j.query?.pages || {})) {
+        const i = pg.imageinfo?.[0], m = i?.extmetadata || {}, r = i ? i.width / i.height : 0;
+        if (!i?.thumburl || i.mime !== "image/jpeg" || r < 1.2 || r > 2 || i.width < 1200 || /map|karte|kart\b|logo|banner|sign|skilt|diagram/i.test(pg.title)) continue;
+        found.set(i.thumburl, { src: i.thumburl, page: i.descriptionurl, artist: stripTags(m.Artist?.value) || "unbekannt", license: stripTags(m.LicenseShortName?.value) || "siehe Wikimedia Commons" });
+      }
+      if (ed !== me) return;
+      await sleep(300);
+    }
+    me.cands = [...found.values()].filter(c => !me.imgs.some(i => i.src === c.src)).slice(0, 18);
+    if (!me.imgs.length && !me.picked.size) me.cands.slice(0, 3).forEach(c => me.picked.add(c.src));
+    $("#edPhotos").dataset.busy = me.cands.length ? "" : "Keine passenden Fotos gefunden.";
+  } catch { $("#edPhotos").dataset.busy = "Wikimedia Commons ist gerade nicht erreichbar."; }
+  if (ed === me) { btn.disabled = false; drawPhotos(); }
+}
+function drawPhotos() {
+  const el = $("#edPhotos"); if (!el || !ed?.imgs) return;
+  const all = [...ed.imgs, ...ed.cands];
+  el.innerHTML = all.map(i => `<button type="button" class="photo" data-edphoto="${esc(i.src)}" aria-pressed="${ed.picked.has(i.src)}" title="${esc(`Foto: ${i.artist}, ${i.license}`)}"><img src="${esc(i.src)}" alt="" loading="lazy"><span aria-hidden="true">✓</span></button>`).join("") +
+    (el.dataset.busy ? `<p class="hint">${esc(el.dataset.busy)}</p>` : all.length ? "" : `<p class="hint">Noch keine Fotos.</p>`);
 }
 function closeEdit() { clearTimeout(edTimer); edRun++; ed = null; $("#editDlg").close(); }
 window.addEventListener("DOMContentLoaded", () => {
@@ -310,6 +366,14 @@ window.addEventListener("DOMContentLoaded", () => {
     finish(undo, `„${esc(raw.name)}“ ist wieder im Original.`);
   });
   $("#edPtUndo").addEventListener("click", () => { if (!ed?.hist?.length) return; ed.pts = ed.hist.pop(); $("#edPtUndo").disabled = !ed.hist.length; edMap.closePopup(); edChanged(); });
+  $("#edFields").addEventListener("click", e => {
+    if (e.target.closest("#edPhotoFind")) { findPhotos(); return; }
+    const b = e.target.closest("[data-edphoto]"); if (!b || !ed?.picked) return;
+    const s = b.dataset.edphoto;
+    if (ed.picked.has(s)) ed.picked.delete(s); else if (ed.picked.size < 6) ed.picked.add(s); else { $("#edErr").textContent = "Höchstens 6 Fotos."; return; }
+    $("#edErr").textContent = ""; drawPhotos();
+  });
+  $("#panoNew").addEventListener("click", () => openEdit("pano", null));
   $("#edMap").addEventListener("click", e => {
     const b = e.target.closest("[data-edrm]"); if (!b || !ed?.pts) return;
     edMap.closePopup();

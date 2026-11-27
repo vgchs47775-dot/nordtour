@@ -40,7 +40,7 @@ Ladereihenfolge (siehe Ende von `app/index.html`):
 | `planer.js` | Route aus Prioritäten; Kennzeichen an Punkten: `wp` (Wegpunkt), `anchor` (An-/Abreise), `key` (Ziel/eigener Ort), an Tagen `auto` (Schlafplatz unterwegs), `panos`; Orte einer Stufe mit `lvNight()` (Vorgabe: Muss) bekommen immer eine Nacht höchstens `settings.gen.near` km entfernt |
 | `etappen.js` | Etappe teilen (Zwischenübernachtung) und Nacht auflösen; Felder `src`, `sights`, `stop`, `split` an Tagen, `pv` an Punkten (Erklärung im Dateikopf); Hinweis `#nightGap` auf Orte ohne Übernachtung in der Nähe |
 | `panowege.js` | eingeplante Panoramastraßen ganz fahren: Wegpunkte `way` (extras.json), Anteil `panoShare()`, Hinweis `#panoGap`, Einbau in bestehende Routen; `pano` an Punkten |
-| `bearbeiten.js` | Orte, Ziele und Panoramastraßen bearbeiten/löschen; Änderungen in `settings.extrasCfg` über extras.json gelegt (immer `PANO()`/`SIGHTS()` benutzen, nie `EXTRAS.pano`), `settings.ort_weg` |
+| `bearbeiten.js` | Orte, Ziele und Panoramastraßen bearbeiten/löschen; Änderungen in `settings.extrasCfg` über extras.json gelegt (immer `PANO()`/`SIGHTS()` benutzen, nie `EXTRAS.pano`), `settings.ort_weg`; eigene Panoramastraßen mit `own` (Fotos von Wikimedia Commons, mit Urheber und Lizenz) |
 | `sky.js`, `aurora.js` | Nachthimmel, Kp-Prognose, Polarlicht-Karte (NOAA) |
 | `journal.js` | Tagebuch; Fotos im privaten Supabase-Bucket `tagebuch`, Warteschlange in IndexedDB |
 | `sync.js`, `cache.js`, `backup.js` | Cloud-Abgleich (`trips`), geteilter Zwischenspeicher (`route_cache`), Sicherungen (`trip_backups`) |

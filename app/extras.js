@@ -28,6 +28,9 @@ function extrasList(kind) {
     // eigener Verlauf: die vorbereiteten Reisetage und Varianten gelten nicht mehr
     return { ...x, ...c, ...(kind === "pano" && c.geom ? { custom: true, days: [], fallbackExtra: "" } : {}) };
   });
+  // selbst angelegte Panoramastraßen (own)
+  if (kind === "pano") for (const [id, c] of Object.entries(cfg || {})) if (c.own && !c.gone && c.geom?.length > 1)
+    list.push({ land: "", fit: "", desc: "", imgs: [], km: 0, ...c, id, custom: true, days: [], fallbackExtra: "" });
   extrasMemo[kind] = { raw, cfg, list }; extrasRev++;
   return list;
 }
@@ -82,7 +85,7 @@ function panoDelta(p) {
 const fmtShort = h => { const m = Math.round(h * 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`; };
 const fmtDelta = (km, h) => `${km >= 0 ? "+" : "−"}${num(Math.abs(km))} km · ${h >= 0 ? "+" : "−"}${fmtShort(Math.abs(h))}`;
 function panoExtraText(p) {
-  if (!p.days.some(id => EXTRAS.variants?.[id]?.[p.id])) return p.custom ? "eigener Verlauf" : p.days.length ? "liegt auf der Route" : p.fallbackExtra;
+  if (!p.days.some(id => EXTRAS.variants?.[id]?.[p.id])) return p.own ? "eigene Panoramastraße" : p.custom ? "eigener Verlauf" : p.days.length ? "liegt auf der Route" : p.fallbackExtra;
   const dl = panoDelta(p);
   if (!dl) return panoBusy ? "Umweg wird berechnet …" : p.fallbackExtra;
   return fmtDelta(dl.km, dl.h) + (dl.n > 1 ? " über beide Tage" : " gegenüber der normalen Etappe");

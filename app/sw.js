@@ -94,6 +94,8 @@ self.addEventListener("fetch", e => {
     }));
     return;
   }
+  // Fotos eigener Panoramastraßen (Wikimedia Commons) nach dem ersten Ansehen offline vorhalten
+  if (u.hostname === "upload.wikimedia.org" || u.hostname === "thumb.wikimedia.org") { e.respondWith(cacheFirst(req, PHOTOS, req, MAX_PHOTOS)); return; }
   // Tagebuch-Fotos: signierte Adresse ändert sich, gespeichert wird ohne den Token
   if (u.hostname.endsWith(".supabase.co") && u.pathname.includes("/storage/v1/object/sign/")) {
     e.respondWith(cacheFirst(req, PHOTOS, u.origin + u.pathname, MAX_PHOTOS));
