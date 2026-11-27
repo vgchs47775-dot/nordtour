@@ -9,6 +9,9 @@
 "use strict";
 
 const GEN_DEFAULT = { drive: 6, days: null, access: true, unprio: false, near: 25 };
+// Wessen Prioritäten? src: p1 / p2 = nur diese Person, max / min / mid = beide zusammen (wie prioMix, prio.js)
+const genPrio = (kind, key, src) => src === "p1" || src === "p2" ? prioOf(kind, key, src === "p1" ? 0 : 1) : mixPrio(kind, prioOf(kind, key, 0), prioOf(kind, key, 1), src || undefined);
+const GEN_SRC = () => { const n = persons(); return [["max", `beide – die wichtigere Stufe zählt`], ["min", `beide – die weniger wichtige Stufe zählt`], ["mid", `beide – die Mitte zählt`], ["p1", `nur ${n[0]}`], ["p2", `nur ${n[1]}`]]; };
 const GEN_MAX_DAY = 11;             // Fahrt + Aufenthalte je Tag, höchstens (h)
 const GEN_SPAN = 1200;              // Luftlinie je Valhalla-Anfrage (Server erlaubt 1500 km)
 let genCancel = false, genBusy = false, genOut = null;
@@ -217,14 +220,14 @@ function genCandidates(opt) {
   const levelOf = pr => { const l = pr ? levels.find(x => x.id === pr) : opt.unprio ? any : null; return l && l.rule !== "nie" ? l : null; };
   const rank = l => { const i = levels.indexOf(l); return i < 0 ? 999 : i; };
   for (const o of allOrte()) {
-    const lv = levelOf(ortPrio(o.key)); if (!lv) continue;
+    const lv = levelOf(genPrio("ort", o.key, opt.src)); if (!lv) continue;
     const s = o.type === "sight" ? SIGHTS().find(x => x.id === o.id) : null, si = s ? base.days.findIndex(d => d.id === s.day) : -1;
     const pos = basePos.get(o.key) ?? (si >= 0 ? trackPos(base.track, o, Math.max(0, si - 1), si + 1).pos : trackPos(base.track, o).pos);
     const stay = lv.rule === "kurz" ? lv.stay : s ? s.visit : lv.stay;
     items.push({ kind: "ort", lv, rank: rank(lv), pos, end: pos, label: o.name, nodes: [{ name: o.name, lat: o.lat, lon: o.lon, key: o.key, stay, ...(lvNight(lv) ? { near: true } : {}) }] });
   }
   for (const p of PANO()) {
-    const lv = levelOf(panoPrio(p.id)); if (!lv) continue;
+    const lv = levelOf(genPrio("pano", p.id, opt.src)); if (!lv) continue;
     const b = panoNodes(p, base);
     items.push({ kind: "pano", lv, rank: rank(lv), pos: b.pos, end: b.end, label: p.name, pano: p, nodes: b.nodes });
   }
@@ -353,7 +356,7 @@ async function generateRoute(opt, progress) {
     for (const x of panoItems) x.why = `${pct(coverOf(x.pano, cells))} der Strecke`;
   }
   return { days: toDays(days), raw: days, chosen: chosen.filter(x => x.kind !== "weg"), nights: nights.length, omitted, opt,
-    skipped: [...allOrte().map(o => [o.name, ortPrio(o.key)]), ...PANO().map(p => [p.name, panoPrio(p.id)])].filter(x => prioLevel(x[1])?.rule === "nie").map(x => x[0]) };
+    skipped: [...allOrte().map(o => [o.name, genPrio("ort", o.key, opt.src)]), ...PANO().map(p => [p.name, genPrio("pano", p.id, opt.src)])].filter(x => prioLevel(x[1])?.rule === "nie").map(x => x[0]) };
 }
 // Planungsergebnis → Reisetage der App
 function toDays(raw) {
@@ -373,15 +376,25 @@ function toDays(raw) {
 
 /* ---------- Dialog ---------- */
 function genOptions() { return { ...GEN_DEFAULT, days: state.days.length || 24, ...(state.settings?.gen || {}) }; }
+// Zahlen je Stufe für die gewählte Quelle (Personen)
+function genCounts(src) {
+  const c = prioCounts(allOrte().map(x => genPrio("ort", x.key, src))), p = prioCounts(PANO().map(x => genPrio("pano", x.id, src)));
+  $("#genCounts").textContent = `${c.ohne || 0} Orte und ${p.ohne || 0} Panoramastraßen haben ${src === "p1" || src === "p2" ? `bei ${persons()[src === "p1" ? 0 : 1]} ` : ""}noch keine Priorität.`;
+  for (const el of document.querySelectorAll("#genLevels [data-genlevel]")) {
+    const l = prioLevel(el.dataset.genlevel); if (!l) continue;
+    el.querySelector(".cnt").textContent = [l.ort ? `Orte: ${c[l.id] || 0}` : "", l.pano ? `Panoramastraßen: ${p[l.id] || 0}` : ""].filter(Boolean).join(", ");
+  }
+}
 function openGen() {
-  const o = genOptions(), c = prioCounts(allOrte().map(x => ortPrio(x.key))), p = prioCounts(PANO().map(x => panoPrio(x.id)));
+  const o = genOptions(), src = o.src || state.settings.prioMix || "max";
+  $("#gSrc").innerHTML = GEN_SRC().map(([v, l]) => `<option value="${v}"${v === src ? " selected" : ""}>${esc(l)}</option>`).join("");
   $("#gDrive").value = o.drive; $("#gDays").value = o.days; $("#gNear").value = o.near; $("#gNearLbl").hidden = !prioLevels("ort").some(lvNight);
   $("#gAccess").checked = o.access; $("#gUnprio").checked = o.unprio;
-  $("#genCounts").textContent = `${c.ohne || 0} Orte und ${p.ohne || 0} Panoramastraßen haben noch keine Priorität.`;
   $("#genLevels").innerHTML = prioLevels().map(l => `<div class="genlevel" data-genlevel="${esc(l.id)}" style="--pc:var(--p-${l.id});--pi:var(--pi-${l.id})">
-    <span class="nm"><span class="ppill">${esc(l.name)}</span><span class="nt">${[l.ort ? `Orte: ${c[l.id] || 0}` : "", l.pano ? `Panoramastraßen: ${p[l.id] || 0}` : ""].filter(Boolean).join(", ")} · ${RULES[l.rule]}${l.ort && lvNight(l) ? " · 🌙 mit Übernachtung in der Nähe" : ""}</span></span>
+    <span class="nm"><span class="ppill">${esc(l.name)}</span><span class="nt"><span class="cnt"></span> · ${RULES[l.rule]}${l.ort && lvNight(l) ? " · 🌙 mit Übernachtung in der Nähe" : ""}</span></span>
     ${l.rule === "nie" ? "" : `<label class="lbl">Zeit je Ort (h)<input type="number" name="stay" min="0" max="12" step="0.25" value="${l.stay}"></label>`}
     ${l.rule === "umweg" ? `<label class="lbl">Umweg max. (h)<input type="number" name="detour" min="0" max="10" step="0.25" value="${l.detour}"></label>` : ""}</div>`).join("");
+  genCounts(src);
   $("#genErr").textContent = ""; $("#genProg").textContent = ""; $("#genResult").innerHTML = ""; genOut = null;
   $("#genDlg").showModal();
 }
@@ -397,6 +410,7 @@ function renderGen(g) {
     ${grp("Weggelassen", g.omitted.map(x => ({ label: x.label, why: `${x.lv.name}, ${x.why}` })))}${grp("Nie einplanen", g.skipped.map(label => ({ label })))}
     <details open><summary>Tage</summary><ol>${g.days.map((d, i) => `<li>${fmtDate(d.date)}: ${esc(d.title)} <span class="hint">${num(g.raw[i].km)} km · ${fmtShort(g.raw[i].drive)}${d.via.filter(v => v.stay).length ? ` · ${d.via.filter(v => v.stay).map(v => esc(v.name)).join(", ")}` : ""}</span></li>`).join("")}</ol></details>
     <form id="genSave" class="inline"><label class="lbl" for="genName">Name der Route<input type="text" id="genName" maxlength="60" required value="Prioritäten ${n}"></label><button class="btn" type="submit">Speichern und auswählen</button></form>
+    <p class="hint">Prioritäten von: ${esc((GEN_SRC().find(x => x[0] === g.opt.src) || GEN_SRC()[0])[1])}.</p>
     <p class="hint">Deine jetzige Route bleibt gespeichert und lässt sich jederzeit wieder auswählen. Fahrzeiten ohne Wartezeit an Fähren.</p></div>`;
 }
 window.addEventListener("DOMContentLoaded", () => {
@@ -405,10 +419,11 @@ window.addEventListener("DOMContentLoaded", () => {
   $("#genDlg").addEventListener("cancel", () => { genCancel = true; });
   $("#genCfg").addEventListener("click", () => { genCancel = true; $("#genDlg").close(); });
   $("#genStop").addEventListener("click", () => { genCancel = true; });
+  $("#gSrc").addEventListener("change", e => genCounts(e.target.value));
   $("#genForm").addEventListener("submit", async e => {
     e.preventDefault(); if (genBusy) return;
     const v = id => parseFloat($(id).value), err = $("#genErr"); err.textContent = "";
-    const opt = { drive: v("#gDrive"), days: v("#gDays"), near: v("#gNear"), access: $("#gAccess").checked, unprio: $("#gUnprio").checked };
+    const opt = { drive: v("#gDrive"), days: v("#gDays"), near: v("#gNear"), access: $("#gAccess").checked, unprio: $("#gUnprio").checked, src: $("#gSrc").value };
     const inputs = [...document.querySelectorAll("#genLevels [data-genlevel] input")];
     if (Object.values(opt).some(x => typeof x === "number" && !isFinite(x)) || inputs.some(x => !isFinite(parseFloat(x.value)))) { err.textContent = "Bitte alle Felder ausfüllen."; return; }
     if (!navigator.onLine) { err.textContent = "Für die Berechnung brauchst du Internet."; return; }

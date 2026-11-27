@@ -60,9 +60,9 @@ function prioOf(kind, key, who) {
   if (kind === "ort" && key.startsWith("p:")) return validPrio("ort", state?.places?.find(p => "p:" + p.id === key)?.[who ? "prio2" : "prio"]);
   return validPrio(kind, state?.settings?.[PRIO_F[kind][who]]?.[key]);
 }
-function mixPrio(kind, a, b) {
+function mixPrio(kind, a, b, mode = state?.settings?.prioMix || "max") {
   if (!a || !b || a === b) return a || b;
-  const L = prioLevels(kind), i = L.findIndex(l => l.id === a), j = L.findIndex(l => l.id === b), mode = state?.settings?.prioMix || "max";
+  const L = prioLevels(kind), i = L.findIndex(l => l.id === a), j = L.findIndex(l => l.id === b);
   return L[mode === "min" ? Math.max(i, j) : mode === "mid" ? Math.floor((i + j) / 2) : Math.min(i, j)].id;
 }
 const panoPrio = id => mixPrio("pano", prioOf("pano", id, 0), prioOf("pano", id, 1));
